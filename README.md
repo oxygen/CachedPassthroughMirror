@@ -13,6 +13,9 @@ So far tested on Windows.
 Usage
 =====
 ```JavaScript
+	const HTTPProxyCache = require("http-proxy-cache-lf");
+	const http = require("http");
+
 	const httpServer = http.createServer();
 
 	const httpProxyCache = new HTTPProxyCache(
