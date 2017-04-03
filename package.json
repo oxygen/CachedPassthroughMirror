@@ -1,0 +1,33 @@
+{
+  "name": "http-proxy-cache-lf",
+  "version": "0.1.0",
+  "description": "Very simple transparent HTTP proxy with cache for large files. Originally written to cache large files for some repetitive operations.",
+  "main": "index.js",
+  "scripts": {
+  },
+  "homepage": "https://github.com/oxygens/Node-HTTPProxyCache",
+  "author": "Ionut Stan <Ionut.Stan@bigstep.com>",
+  "license": "MIT",
+  "contributors": [
+    {
+      "name": "Ionut Stan",
+      "email": "Ionut.Stan@bigstep.com"
+    }
+  ],
+  "preferGlobal": false,
+  "private": false,
+  "engines": {
+    "node": ">=7.80"
+  },
+  "dependencies": {
+    "fs-promise": "^2.0.2",
+    "http-proxy": "^1.16.2",
+    "sleep-promise": "^2.0.0",
+    "stream-copy": "^1.0.0"
+  },
+  "devDependencies": {
+    "babel-eslint": "*",
+    "eslint": "*",
+    "eslint-plugin-jsdoc": "*"
+  }
+}
