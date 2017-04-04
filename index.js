@@ -24,6 +24,8 @@ class HTTPProxyCache
 		this._strCacheDirectoryRootPath = strCacheDirectoryRootPath;
 
 		this._proxy = HTTPProxy.createProxyServer();
+
+		this._objCachePromises = {};
 	}
 
 
@@ -39,7 +41,15 @@ class HTTPProxyCache
 			incomingRequest.method === "GET"
 			&& !objParsedURL.pathname.includes("..")
 		)
-		{	
+		{
+			const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
+
+			if(this._objCachePromises[strCachedFilePath] !== undefined)
+			{
+				await this._objCachePromises[strCachedFilePath];
+			}
+
+
 			var requestOptions = {
 				method: "HEAD", 
 				host: url.parse(this._strTargetURLBasePath).hostname, 
@@ -68,14 +78,14 @@ class HTTPProxyCache
 			)
 			{
 				if(
-					!fs.existsSync(this._strCacheDirectoryRootPath)
+					!fs.existsSync(strCachedFilePath)
 					|| (
 						serverResponse.headers["content-length"]
-						&& fs.statSync(this._strCacheDirectoryRootPath).size !== parseInt(serverResponse.headers["content-length"], 10)
+						&& fs.statSync(strCachedFilePath).size !== parseInt(serverResponse.headers["content-length"], 10)
 					)
 					|| (
 						serverResponse.headers["last-modified"]
-						&& Math.floor(fs.statSync(this._strCacheDirectoryRootPath).mtime.getTime() / 1000) !== Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000)
+						&& Math.floor(fs.statSync(strCachedFilePath).mtime.getTime() / 1000) !== Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000)
 					)
 				)
 				{
@@ -84,7 +94,7 @@ class HTTPProxyCache
 					// Synchronous mode to almost guarantee no concurrency in creating the missing directories.
 					let strPathSoFar = "";
 
-					for(let strFolderName of path.dirname(this._strCacheDirectoryRootPath).split(path.sep))
+					for(let strFolderName of path.dirname(strCachedFilePath).split(path.sep))
 					{
 						strPathSoFar += strFolderName + path.sep;
 						
@@ -96,11 +106,11 @@ class HTTPProxyCache
 
 					try
 					{
-						await new Promise(async (fnResolve, fnReject) => {
+						this._objCachePromises[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
 							//let nStreamsFinished = 0;
 
 
-							const wstream = fs.createWriteStream(this._strCacheDirectoryRootPath);
+							const wstream = fs.createWriteStream(strCachedFilePath);
 
 							wstream.on("error",	fnReject);
 							
@@ -149,12 +159,17 @@ class HTTPProxyCache
 
 							req.end();
 						});
+
+						await this._objCachePromises[strCachedFilePath];
 					}
 					catch(error)
 					{
 						console.log(error);
 						serverResponse.statusCode = 500;
 						serverResponse.end();
+
+						delete this._objCachePromises[strCachedFilePath];
+
 						return;
 					}
 
@@ -164,20 +179,22 @@ class HTTPProxyCache
 					setTimeout(
 						async () => {
 							const nUnixTimeSeconds = Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000);
-							await fs.utimes(this._strCacheDirectoryRootPath, nUnixTimeSeconds, nUnixTimeSeconds);
+							await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+
+							delete this._objCachePromises[strCachedFilePath];
 						},
 						1000
 					);
 
 					return;
 				}
-				else if(await fs.exists(this._strCacheDirectoryRootPath))
+				else if(await fs.exists(strCachedFilePath))
 				{
 					await new Promise(async (fnResolve, fnReject) => {
 						serverResponse.headers["content-type"] = "application/octet-stream";
 						delete serverResponse.headers["content-encoding"];
 
-						var rstream = fs.createReadStream(this._strCacheDirectoryRootPath);
+						var rstream = fs.createReadStream(strCachedFilePath);
 						rstream.pipe(serverResponse);
 
 						rstream.on(
