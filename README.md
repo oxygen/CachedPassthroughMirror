@@ -4,11 +4,11 @@ Very simple transparent HTTP proxy with cache for large files. Originally writte
 
 Writes to the cache and serves the large files at the same time (stream copy).
 
-The `Content-length` and `Last-modified` headers (from a `HEAD` request to the target server) to determine if the local cache large file is to be invalided.
+The `Content-length` and `Last-modified` headers (from a `HEAD` request to the target server) are used to determine if the cached file is to be invalided.
 
-So far tested on Windows.
+So far tested on Windows. Should work without issues on all platforms.
 
-@TODO: write tests, examples, etc.
+@TODO: write tests, examples, CLI endpoint, etc.
 
 Usage
 =====
