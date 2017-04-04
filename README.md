@@ -4,7 +4,13 @@ Very simple transparent HTTP proxy with cache for large files. Originally writte
 
 Writes to the cache and serves the large files at the same time (stream copy).
 
-The `Content-length` and `Last-modified` headers (from a `HEAD` request to the target server) are used to determine if the cached file is to be invalided.
+This cache saves bandwidth not latency.
+
+It creates a "browsable" directory structure replica for the target server, but only for the files which meet or exceed `nBytesMinimumFileSize`.
+
+The `Content-length` and `Last-modified` headers (from a `HEAD` request to the target server) are used to determine if the cached file is to be invalided. __The `HEAD` request is always made__ and so is depended upon (to proxy updated headers and for immediate cache invalidation).
+
+There are no plans to add non-ASCII characters support or saving of headers, or 100% independent mirror capabilities.
 
 So far tested on Windows. Should work without issues on all platforms.
 
