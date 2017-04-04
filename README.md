@@ -6,7 +6,7 @@ Writes to the cache and serves the large files at the same time (stream copy).
 
 This cache saves bandwidth not latency.
 
-It creates a "browsable" directory structure replica for the target server, but only for the files which meet or exceed `nBytesMinimumFileSize`.
+It replicates the directory structure the target server, only cached files (which meet or exceed `nBytesMinimumFileSize`).
 
 The `Content-length` and `Last-modified` headers (from a `HEAD` request to the target server) are used to determine if the cached file is to be invalided. __The `HEAD` request is always made__ and so is depended upon (to proxy updated headers and for immediate cache invalidation).
 
