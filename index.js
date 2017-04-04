@@ -46,7 +46,14 @@ class HTTPProxyCache
 
 			if(this._objCachePromises[strCachedFilePath] !== undefined)
 			{
-				await this._objCachePromises[strCachedFilePath];
+				try
+				{
+					await this._objCachePromises[strCachedFilePath];
+				}
+				catch(error)
+				{
+					console.log(error);
+				}
 			}
 
 
