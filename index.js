@@ -183,16 +183,12 @@ class HTTPProxyCache
 
 					// Somehow the write stream has some sort of delay in updating the modified date (OS thing?).
 					// Writing the time later.
-					setTimeout(
-						async () => {
-							const nUnixTimeSeconds = Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000);
-							await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+					await sleep(1000);
+					const nUnixTimeSeconds = Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000);
+					await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
 
-							delete this._objCachePromises[strCachedFilePath];
-						},
-						1000
-					);
-
+					delete this._objCachePromises[strCachedFilePath];
+					
 					return;
 				}
 				else if(await fs.exists(strCachedFilePath))
