@@ -1,14 +1,14 @@
 {
   "name": "http-proxy-cache-lf",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Passthrough HTTP mirror with caching for large files.",
   "main": "index.js",
   "scripts": {
   },
-  "homepage": "https://github.com/oxygens/Node-HTTPProxyCache",
+  "homepage": "https://github.com/oxygens/CachedPassthroughMirror",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/oxygens/Node-HTTPProxyCache.git"
+    "url": "git+https://github.com/oxygens/CachedPassthroughMirror.git"
   },
   "author": "Ionut Stan <Ionut.Stan@bigstep.com>",
   "license": "MIT",
