@@ -40,6 +40,7 @@ class HTTPProxyCache
 		if(
 			incomingRequest.method === "GET"
 			&& !objParsedURL.pathname.includes("..")
+			&& !incomingRequest.headers["range"]
 		)
 		{
 			try
