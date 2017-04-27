@@ -2,7 +2,9 @@ Cached passthrough HTTP mirror
 ==============================
 Very simple HTTP passthrough mirror (proxy) with cache for large files. Originally written to cache large files for some repetitive operations.
 
-Writes to the cache and serves the large files at the same time (stream copy).
+Writes to the cache and serves the large files at the same time ([stream-copy](https://github.com/alexmingoia/stream-copy)).
+
+Uses [http-proxy](https://github.com/nodejitsu/node-http-proxy) for the HTTP proxy part.
 
 This cache saves bandwidth not latency.
 
