@@ -201,9 +201,9 @@ class HTTPProxyCache
 							delete serverResponse.headers["content-encoding"];
 
 							var rstream = fs.createReadStream(strCachedFilePath);
-							rstream.pipe(serverResponse);
+							const pipeStream = rstream.pipe(serverResponse);
 
-							rstream.on(
+							pipeStream.on(
 								"error",
 								(error) => {
 									serverResponse.statusCode = 500;
@@ -213,8 +213,8 @@ class HTTPProxyCache
 								}
 							);
 
-							rstream.on(
-								"end",
+							pipeStream.on(
+								"finish",
 								() => {
 									serverResponse.statusCode = 200;
 									serverResponse.end();
