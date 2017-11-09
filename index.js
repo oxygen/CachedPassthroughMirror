@@ -94,8 +94,9 @@ class HTTPProxyCache
 							&& fs.statSync(strCachedFilePath).size !== parseInt(serverResponse.headers["content-length"], 10)
 						)
 						|| (
+							// If the web server's last modified timestamp is earlier than the local copy, then the local copy's modified timestamp is useless.
 							serverResponse.headers["last-modified"]
-							&& Math.floor(fs.statSync(strCachedFilePath).mtime.getTime() / 1000) !== Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000)
+							&& Math.floor(fs.statSync(strCachedFilePath).mtime.getTime() / 1000) < Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000)
 						)
 					)
 					{
