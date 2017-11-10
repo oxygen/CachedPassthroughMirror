@@ -14,7 +14,7 @@ The `Content-length` and `Last-modified` headers (from a `HEAD` request to the t
 
 There are no plans to add non-ASCII characters support or saving of headers, or 100% independent mirror capabilities.
 
-So far tested on Windows. Should work without issues on all platforms.
+So far tested on Windows and Ubuntu. Should work without issues on all platforms though.
 
 @TODO: write tests, examples, CLI endpoint, etc.
 
