@@ -252,7 +252,11 @@ class HTTPProxyCache
 			incomingRequest, 
 			serverResponse, 
 			{
-				target: this._strTargetURLBasePath
+				target: this._strTargetURLBasePath,
+				
+				// { '0': [Error: Hostname/IP doesn't match certificate's altnames] }
+				// https://stackoverflow.com/a/45579167/584490
+				changeOrigin: true
 			}
 		);
 	}
