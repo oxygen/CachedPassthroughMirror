@@ -111,8 +111,6 @@ class HTTPProxyCache
 					}
 				}
 
-				bSkipCacheWrite = true;
-
 				if(
 					!bSkipCacheWrite
 					&& _incomingMessageHEAD.headers["content-length"]
