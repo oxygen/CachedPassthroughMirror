@@ -49,7 +49,15 @@ class HTTPProxyCache
 				let bSkipCacheWrite = false;
 				let bSkipStorageCache = false;
 
-				if(objParsedURL.pathname === "/" || objParsedURL.pathname === "")
+				if(
+					objParsedURL.pathname === "/"
+					|| objParsedURL.pathname === ""
+					|| objParsedURL.pathname.substr(-1) === "/"
+					|| (
+						fs.existsSync(strCachedFilePath)
+						&& (await fs.stat(strCachedFilePath)).isDirectory 
+					)
+				)
 				{
 					bSkipCacheWrite = true;
 					bSkipStorageCache = true;
