@@ -49,6 +49,12 @@ class HTTPProxyCache
 				let bSkipCacheWrite = false;
 				let bSkipStorageCache = false;
 
+				if(objParsedURL.pathname === "/" || objParsedURL.pathname === "")
+				{
+					bSkipCacheWrite = true;
+					bSkipStorageCache = true;
+				}
+
 				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
 
 				if(this._objOngoingCacheWrites[strCachedFilePath] !== undefined)
