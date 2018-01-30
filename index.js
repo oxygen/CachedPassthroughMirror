@@ -49,6 +49,8 @@ class HTTPProxyCache
 				let bSkipCacheWrite = false;
 				let bSkipStorageCache = false;
 
+				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
+
 				if(
 					objParsedURL.pathname === "/"
 					|| objParsedURL.pathname === ""
@@ -62,8 +64,6 @@ class HTTPProxyCache
 					bSkipCacheWrite = true;
 					bSkipStorageCache = true;
 				}
-
-				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
 
 				if(this._objOngoingCacheWrites[strCachedFilePath] !== undefined)
 				{
