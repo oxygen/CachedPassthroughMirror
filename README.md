@@ -16,6 +16,8 @@ There are no plans to add non-ASCII characters support or saving of headers, or 
 
 So far tested on Windows and Ubuntu. Should work without issues on all platforms though.
 
+__Security WARNING:__ HTTP authorization skip: when the HEAD request fails either with a non-200 HTTP status code or at network level (or something else), and the file is served directly from the cache storage, there will be no HTTP authorization. This might be fixed in the future, but at the present time, it presents a risk where security matters.
+
 @TODO: write tests, examples, CLI endpoint, etc.
 
 Usage
