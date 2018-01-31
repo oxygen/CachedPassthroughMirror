@@ -64,7 +64,7 @@ class HTTPProxyCache
 					|| objParsedURL.pathname.substr(-1) === "/"
 					|| (
 						fs.existsSync(strCachedFilePath)
-						&& (await fs.stat(strCachedFilePath)).isDirectory 
+						&& (await fs.stat(strCachedFilePath)).isDirectory()
 					)
 				)
 				{
@@ -102,7 +102,7 @@ class HTTPProxyCache
 						requestOptions = {
 							method: "HEAD", 
 							host: this._objParsedTargetURL.hostname, 
-							//port: this._objParsedTargetURL.port ? this._objParsedTargetURL.port : (this._objParsedTargetURL.protocol === "https:" ? 443 : 80), 
+							port: this._objParsedTargetURL.port ? this._objParsedTargetURL.port : undefined, 
 							path: this._objParsedTargetURL.path /*ends in /, see constructor() */ + objParsedURL.path.substr(1),
 							headers: {}
 						};
@@ -118,9 +118,8 @@ class HTTPProxyCache
 						// Obtain headers with a HEAD request.
 						// Content-length is used to determine if the file is big enough to warrant caching.
 						// Last-modified is used to determine if the file has changed in the meantime.
-						
 						_incomingMessageHEAD = await new Promise((fnResolve, fnReject) => {
-							const req = (objParsedURL.protocol === "https:" ? http : http).request(requestOptions, function(_incomingMessageHEAD) {
+							const req = (objParsedURL.protocol === "https:" ? https : http).request(requestOptions, function(_incomingMessageHEAD) {
 								fnResolve(_incomingMessageHEAD);
 							});
 
@@ -128,7 +127,18 @@ class HTTPProxyCache
 
 							req.end();
 						});
+						
 
+						if(
+							parseInt(_incomingMessageHEAD.statusCode, 10) === 404
+							&& fs.existsSync(strCachedFilePath)
+							&& !(await fs.stat(strCachedFilePath)).isDirectory()
+						)
+						{
+							console.error("HEAD request status code " + JSON.stringify(_incomingMessageHEAD.statusCode) + ", deleting existing cached file.");
+							fs.unlink(strCachedFilePath).catch(console.error);
+						}
+						
 						if(
 							_incomingMessageHEAD.statusCode < 200
 							|| _incomingMessageHEAD.statusCode > 299
@@ -278,7 +288,7 @@ class HTTPProxyCache
 				// then attempt to server the file from cache if it exists.
 				if(
 					!bSkipStorageCache
-					&& await fs.exists(strCachedFilePath)
+					&& fs.existsSync(strCachedFilePath)
 				)
 				{
 					await new Promise(async (fnResolve, fnReject) => {
