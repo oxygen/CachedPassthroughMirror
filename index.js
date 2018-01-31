@@ -1,3 +1,4 @@
+const assert = require("assert");
 const http = require("http");
 const https = require("https");
 const HTTPProxy = require("http-proxy");
@@ -21,6 +22,12 @@ class HTTPProxyCache
 	constructor(strTargetURLBasePath, nBytesMinimumFileSize, strCacheDirectoryRootPath)
 	{
 		this._strTargetURLBasePath = strTargetURLBasePath.split("?")[0].split("#")[0];
+		if(this._strTargetURLBasePath.substr(-1) !== "/")
+		{
+			this._strTargetURLBasePath += "/";
+		}
+		this._objParsedTargetURL = url.parse(this._strTargetURLBasePath);
+
 		this._nBytesMinimumFileSize = nBytesMinimumFileSize;
 		this._strCacheDirectoryRootPath = strCacheDirectoryRootPath;
 
@@ -84,23 +91,36 @@ class HTTPProxyCache
 
 
 				let _incomingMessageHEAD = null;
+				let requestOptions = null;
 
 				if(!bSkipCacheWrite)
 				{
 					try
 					{
-						var requestOptions = {
+						assert(this._objParsedTargetURL.path.substr(-1) === "/", "Path root sandbox must end in /");
+
+						requestOptions = {
 							method: "HEAD", 
-							host: url.parse(this._strTargetURLBasePath).hostname, 
-							port: objParsedURL.port ? objParsedURL.port : (objParsedURL.protocol === "https:" ? 443 : 80), 
-							path: objParsedURL.path
+							host: this._objParsedTargetURL.hostname, 
+							//port: this._objParsedTargetURL.port ? this._objParsedTargetURL.port : (this._objParsedTargetURL.protocol === "https:" ? 443 : 80), 
+							path: this._objParsedTargetURL.path /*ends in /, see constructor() */ + objParsedURL.path.substr(1),
+							headers: {}
 						};
+
+						for(let strHeaderName of ["user-agent", "authorization", "proxy-authorization", "www-authenticate", "accept", "accept-language", "cache-control", "cookie", "referer"])
+						{
+							if(incomingRequest.headers[strHeaderName] !== undefined)
+							{
+								requestOptions.headers[strHeaderName] = incomingRequest.headers[strHeaderName];
+							}
+						}
 
 						// Obtain headers with a HEAD request.
 						// Content-length is used to determine if the file is big enough to warrant caching.
 						// Last-modified is used to determine if the file has changed in the meantime.
+						
 						_incomingMessageHEAD = await new Promise((fnResolve, fnReject) => {
-							const req = (objParsedURL.protocol === "https:" ? https : http).request(requestOptions, function(_incomingMessageHEAD) {
+							const req = (objParsedURL.protocol === "https:" ? http : http).request(requestOptions, function(_incomingMessageHEAD) {
 								fnResolve(_incomingMessageHEAD);
 							});
 
@@ -114,6 +134,7 @@ class HTTPProxyCache
 							|| _incomingMessageHEAD.statusCode > 299
 						)
 						{
+							console.error("HEAD request status code " + JSON.stringify(_incomingMessageHEAD.statusCode) + ", skipping cache write.");
 							bSkipCacheWrite = true;
 						}
 					}
@@ -121,6 +142,8 @@ class HTTPProxyCache
 					{
 						console.error(error);
 
+						console.error("HEAD request failed with error.");
+						console.error(error);
 						bSkipCacheWrite = true;
 					}
 				}
