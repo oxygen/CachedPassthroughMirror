@@ -197,14 +197,14 @@ class HTTPProxyCache
 							}
 						}
 
+						const strSufixExtension = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
+
 						try
 						{
 							// Condition to avoid race condition.
 							if(this._objOngoingCacheWrites[strCachedFilePath] === undefined)
 							{
 								this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
-									const strSufixExtension = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
-
 									//let nStreamsFinished = 0;
 
 									const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
