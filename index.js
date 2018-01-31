@@ -6,6 +6,7 @@ const url = require("url");
 const fs = require("fs-promise");
 const path = require("path");
 const sleep = require("sleep-promise");
+const cluster = require("cluster");
 
 const stream = require("stream");
 stream.copy = require("stream-copy").copy;
@@ -202,9 +203,11 @@ class HTTPProxyCache
 							if(this._objOngoingCacheWrites[strCachedFilePath] === undefined)
 							{
 								this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
+									const strSufixExtension = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
+
 									//let nStreamsFinished = 0;
 
-									const wstream = fs.createWriteStream(strCachedFilePath + ".httpproxy.download");
+									const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
 
 									wstream.on("error",	fnReject);
 									
@@ -268,13 +271,17 @@ class HTTPProxyCache
 							return;
 						}
 
-						await fs.rename(strCachedFilePath + ".httpproxy.download", strCachedFilePath);
+						if(!fs.existsSync(strCachedFilePath))
+						{
+							fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath).catch(console.error);
+							//await fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath);
 
-						// Somehow the write stream has some sort of delay in updating the modified date (OS thing?).
-						// Writing the time later.
-						await sleep(1000);
-						const nUnixTimeSeconds = Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000);
-						await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+							// Somehow the write stream has some sort of delay in updating the modified date (OS thing?).
+							// Writing the time later.
+							await sleep(1000);
+							const nUnixTimeSeconds = Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000);
+							await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+						}
 
 						delete this._objOngoingCacheWrites[strCachedFilePath];
 						
