@@ -1,6 +1,6 @@
 Cached passthrough HTTP mirror
 ==============================
-Very simple HTTP passthrough mirror (proxy) with cache for large files. Originally written to cache large files for some repetitive operations.
+Very simple HTTP passthrough mirror (proxy) with an aggresive cache for large files (ignores cache headers and caches everything larger than a specified minimum size). Originally written to cache large files to accelerate some repetitive operations.
 
 Writes to the cache and serves the large files at the same time ([stream-copy](https://github.com/alexmingoia/stream-copy)).
 
