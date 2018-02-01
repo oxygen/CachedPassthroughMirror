@@ -46,9 +46,18 @@ class HTTPProxyCache
 	{
 		const objParsedURL = url.parse(incomingRequest.url);
 
+		const strPathNameLowerCase = objParsedURL.pathname.toLowerCase();
+
 		if(
 			incomingRequest.method === "GET"
 			&& !objParsedURL.pathname.includes("..")
+
+			// Just to be safe in the future, if maybe URI decoding will be added.
+			&& !strPathNameLowerCase.includes("%2e%2e") // ".."
+			&& !strPathNameLowerCase.includes("%2e.") // ".."
+			&& !strPathNameLowerCase.includes(".%2e") // ".."
+
+			// @TODO add support for *reading* a range from a *cached* file.
 			&& !incomingRequest.headers["range"]
 		)
 		{
@@ -56,6 +65,13 @@ class HTTPProxyCache
 			{
 				let bSkipCacheWrite = false;
 				let bSkipStorageCache = false;
+
+				// @TODO add support for *reading* a range from a *cached* file.
+				if(incomingRequest.headers["range"])
+				{
+					bSkipCacheWrite = true;
+				}
+
 
 				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
 
