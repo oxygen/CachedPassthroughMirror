@@ -46,42 +46,32 @@ class HTTPProxyCache
 	{
 		const objParsedURL = url.parse(incomingRequest.url);
 
-		const strPathNameLowerCase = objParsedURL.pathname.toLowerCase();
-
 		if(
 			incomingRequest.method === "GET"
 			&& !objParsedURL.pathname.includes("..")
-
-			// Just to be safe in the future, if maybe URI decoding will be added.
-			&& !strPathNameLowerCase.includes("%2e%2e") // ".."
-			&& !strPathNameLowerCase.includes("%2e.") // ".."
-			&& !strPathNameLowerCase.includes(".%2e") // ".."
-
-			// @TODO add support for *reading* a range from a *cached* file.
 			&& !incomingRequest.headers["range"]
 		)
 		{
 			try
 			{
+				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
 				let bSkipCacheWrite = false;
 				let bSkipStorageCache = false;
+				let bCachedFileExists = fs.existsSync(strCachedFilePath);
+				let cachedFileStats = null;
 
-				// @TODO add support for *reading* a range from a *cached* file.
-				if(incomingRequest.headers["range"])
+				if(bCachedFileExists)
 				{
-					bSkipCacheWrite = true;
+					cachedFileStats = await fs.stat(strCachedFilePath);
 				}
-
-
-				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
 
 				if(
 					objParsedURL.pathname === "/"
 					|| objParsedURL.pathname === ""
 					|| objParsedURL.pathname.substr(-1) === "/"
 					|| (
-						fs.existsSync(strCachedFilePath)
-						&& (await fs.stat(strCachedFilePath)).isDirectory()
+						cachedFileStats !== null
+						&& cachedFileStats.isDirectory()
 					)
 				)
 				{
@@ -124,7 +114,7 @@ class HTTPProxyCache
 							headers: {}
 						};
 
-						for(let strHeaderName of ["user-agent", "authorization", "proxy-authorization", "www-authenticate", "accept", "accept-language", "cache-control", "cookie", "referer"])
+						for(let strHeaderName of ["range", "content-length", "user-agent", "authorization", "proxy-authorization", "www-authenticate", "accept", "accept-language", "cache-control", "cookie", "referer"])
 						{
 							if(incomingRequest.headers[strHeaderName] !== undefined)
 							{
@@ -148,8 +138,10 @@ class HTTPProxyCache
 
 						if(
 							parseInt(_incomingMessageHEAD.statusCode, 10) === 404
+							
+							// check again, don't use bCachedFileExists
 							&& fs.existsSync(strCachedFilePath)
-							&& !(await fs.stat(strCachedFilePath)).isDirectory()
+							&& !cachedFileStats.isDirectory()
 						)
 						{
 							console.error("HEAD request status code " + JSON.stringify(_incomingMessageHEAD.statusCode) + ", deleting existing cached file.");
@@ -181,18 +173,24 @@ class HTTPProxyCache
 					&& _incomingMessageHEAD.headers["content-length"] >= this._nBytesMinimumFileSize
 				)
 				{
-					serverResponse.headers = _incomingMessageHEAD.headers;
+					for(let strHeaderName in _incomingMessageHEAD.headers)
+					{
+						serverResponse.setHeader(strHeaderName, _incomingMessageHEAD.headers[strHeaderName]);
+					}
 
 					if(
+						// Check again, don't use bCachedFileExists
 						!fs.existsSync(strCachedFilePath)
 						|| (
-							serverResponse.headers["content-length"]
-							&& fs.statSync(strCachedFilePath).size !== parseInt(serverResponse.headers["content-length"], 10)
+							serverResponse.hasHeader("content-length")
+							&& cachedFileStats !== null
+							&& cachedFileStats.size !== parseInt(serverResponse.getHeader("content-length"), 10)
 						)
 						|| (
 							// If the web server's last modified timestamp is earlier than the local copy, then the local copy's modified timestamp is useless.
-							serverResponse.headers["last-modified"]
-							&& Math.floor(fs.statSync(strCachedFilePath).mtime.getTime() / 1000) < Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000)
+							serverResponse.hasHeader("last-modified")
+							&& cachedFileStats !== null
+							&& Math.floor(cachedFileStats.mtime.getTime() / 1000) < Math.floor(new Date(serverResponse.getHeader("last-modified")).getTime() / 1000)
 						)
 					)
 					{
@@ -287,15 +285,25 @@ class HTTPProxyCache
 							return;
 						}
 
+						// Check again, don't use bCachedFileExists.
 						if(!fs.existsSync(strCachedFilePath))
 						{
-							fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath).catch(console.error);
+							try
+							{
+								fs.renameSync(strCachedFilePath + strSufixExtension, strCachedFilePath);
+							}
+							catch(error)
+							{
+								console.error;
+							}
 							//await fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath);
+
+							cachedFileStats = await fs.stat(strCachedFilePath);
 
 							// Somehow the write stream has some sort of delay in updating the modified date (OS thing?).
 							// Writing the time later.
 							await sleep(1000);
-							const nUnixTimeSeconds = Math.floor(new Date(serverResponse.headers["last-modified"]).getTime() / 1000);
+							const nUnixTimeSeconds = Math.floor(new Date(serverResponse.getHeader("last-modified")).getTime() / 1000);
 							await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
 						}
 
@@ -311,20 +319,22 @@ class HTTPProxyCache
 				// then attempt to server the file from cache if it exists.
 				if(
 					!bSkipStorageCache
+					
+					// check again, don't use bCachedFileExists
 					&& fs.existsSync(strCachedFilePath)
 				)
 				{
 					await new Promise(async (fnResolve, fnReject) => {
 						serverResponse.statusCode = 200;
 
-						const objFileStats = await fs.stat(strCachedFilePath);
-
-						serverResponse.headers = {};
-						serverResponse.headers["content-type"] = "application/octet-stream";
-						serverResponse.headers["content-length"] = objFileStats.size;
-						serverResponse.headers["last-modified"] = (new Date(objFileStats.mtimeMs)).toUTCString();
+						serverResponse.setHeader("content-type", "application/octet-stream");
 						
-						delete serverResponse.headers["content-encoding"];
+						cachedFileStats = await fs.stat(strCachedFilePath);
+
+						serverResponse.setHeader("content-length", cachedFileStats.size);
+						serverResponse.setHeader("last-modified", (new Date(cachedFileStats.mtimeMs)).toUTCString());
+						
+						serverResponse.removeHeader("content-encoding");
 
 						var rstream = fs.createReadStream(strCachedFilePath);
 						const pipeStream = rstream.pipe(serverResponse);
