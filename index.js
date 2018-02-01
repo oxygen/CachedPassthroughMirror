@@ -294,7 +294,7 @@ class HTTPProxyCache
 							}
 							catch(error)
 							{
-								console.error;
+								console.error(error);
 							}
 							//await fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath);
 
@@ -305,6 +305,17 @@ class HTTPProxyCache
 							await sleep(1000);
 							const nUnixTimeSeconds = Math.floor(new Date(serverResponse.getHeader("last-modified")).getTime() / 1000);
 							await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+						}
+						else
+						{
+							try
+							{
+								fs.unlinkSync(strCachedFilePath + strSufixExtension);
+							}
+							catch(error)
+							{
+								console.error(error);
+							}
 						}
 
 						delete this._objOngoingCacheWrites[strCachedFilePath];
