@@ -1,9 +1,10 @@
 {
   "name": "http-proxy-cache-lf",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Passthrough HTTP mirror with caching for large files.",
   "main": "index.js",
   "scripts": {
+    "test": "node ./tests/main.js"
   },
   "homepage": "https://github.com/oxygens/CachedPassthroughMirror",
   "repository": {
@@ -32,6 +33,9 @@
   "devDependencies": {
     "babel-eslint": "*",
     "eslint": "*",
-    "eslint-plugin-jsdoc": "*"
+    "eslint-plugin-jsdoc": "*",
+    "jsonrpc-bidirectional": "^5.7.3",
+    "node-fetch": "^1.7.3",
+    "tmp": "0.0.33"
   }
 }

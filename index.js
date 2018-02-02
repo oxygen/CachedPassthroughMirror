@@ -285,8 +285,14 @@ class HTTPProxyCache
 							return;
 						}
 
+						cachedFileStats = await fs.stat(strCachedFilePath + strSufixExtension);
+
 						// Check again, don't use bCachedFileExists.
-						if(!fs.existsSync(strCachedFilePath))
+						if(
+							!fs.existsSync(strCachedFilePath)
+							&& parseInt(serverResponse.getHeader("content-length"), 10)
+							&& parseInt(cachedFileStats.size, 10) === parseInt(serverResponse.getHeader("content-length"), 10)
+						)
 						{
 							try
 							{
@@ -298,13 +304,14 @@ class HTTPProxyCache
 							}
 							//await fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath);
 
-							cachedFileStats = await fs.stat(strCachedFilePath);
-
 							// Somehow the write stream has some sort of delay in updating the modified date (OS thing?).
 							// Writing the time later.
 							await sleep(1000);
-							const nUnixTimeSeconds = Math.floor(new Date(serverResponse.getHeader("last-modified")).getTime() / 1000);
-							await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+							if(serverResponse.getHeader("last-modified"))
+							{
+								const nUnixTimeSeconds = Math.floor(new Date(serverResponse.getHeader("last-modified")).getTime() / 1000);
+								await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+							}
 						}
 						else
 						{
