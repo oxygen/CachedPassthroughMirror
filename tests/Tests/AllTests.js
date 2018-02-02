@@ -5,7 +5,7 @@ const fetch = require("node-fetch");
 
 const HTTPProxyCache = require("../..");
 
-const WorkersRPC = require("../WorkersRPC");
+const WorkerEndpoint = require("../WorkersRPC/WorkerEndpoint");
 
 module.exports =
 class AllTests
@@ -28,12 +28,13 @@ class AllTests
 	{
 		assert(cluster.isMaster, "Expecting cluster.isMaster to be true.");
 
-		const strRootCachedURL = `http://${WorkersRPC.WorkerEndpoint.httpListenHostname}:${WorkersRPC.WorkerEndpoint.httpCachedProxyServerPort}`;
+		const strRootCachedURL = `http://${WorkerEndpoint.httpListenHostname}:${WorkerEndpoint.httpCachedProxyServerPort}`;
 
 		// @TODO:
 
 		// TODO: check returned status, the expected files exist in this._strCacheDirectoryPath and is of exactly 10MB.
 		await fetch(strRootCachedURL + "/200-OK.10MB-10seconds.bin");
+		//assert(fs.fileExists());
 		
 		// put some file in this._strCacheDirectoryPath by hand.
 		await fetch(strRootCachedURL + "/some-file-not-on-the-repo");
