@@ -58,16 +58,16 @@ class AllTests
 
 
 		// Should be must faster than 10 seconds, it needs to come from the cache.
-		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/200-OK.10MB-10seconds.bin?129831798792792"));
+		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/200-OK.10MB-10seconds.bin?129831798792792"), 200);
 
 		// The temporary download file must not persist in the cache folder.
-		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/200-OK.5MB-5seconds-ConnectionReset.bin", 200, 1 * 1024 * 1024));
+		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/200-OK.1MB-1seconds-ConnectionReset.bin", 200, 1 * 1024 * 1024));
 
-		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/401-Unauthorized"));
+		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/401-Unauthorized"), 401);
 
-		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/403-Forbidden"));
+		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/403-Forbidden"), 403);
 
-		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/500-InternalServerError"));
+		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/500-InternalServerError"), 500);
 
 		try
 		{
@@ -82,7 +82,7 @@ class AllTests
 			}
 		}
 
-		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/404"));
+		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/404"), 404);
 
 		console.log("[" + process.pid + "] Done!!!");
 		this._masterEndpoint.gracefulExit(/*incomingRequest*/ undefined);

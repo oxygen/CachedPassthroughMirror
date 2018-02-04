@@ -1,3 +1,5 @@
+const cluster = require("cluster");
+
 const JSONRPC = require("jsonrpc-bidirectional");
 const sleep = require("sleep-promise");
 
@@ -18,7 +20,7 @@ class MasterEndpoint extends JSONRPC.NodeClusterBase.MasterEndpoint
 		this._strCacheDirectoryPath = strCacheDirectoryPath;
 		console.log("Cache directory path: " + this._strCacheDirectoryPath);
 
-		this._nMaxWorkersCount = 1;
+		// this._nMaxWorkersCount = 1;
 
 		this._promiseRunningTests = null;
 	}
@@ -71,7 +73,7 @@ class MasterEndpoint extends JSONRPC.NodeClusterBase.MasterEndpoint
 
 		if(this._promiseRunningTests === null)
 		{
-			await sleep(2000);
+			await sleep(5000);
 			for(let i = this.workerClients.length - 1; i >= 0; i--)
 			{
 				if(!this.workerClients[i].ready)
@@ -83,6 +85,17 @@ class MasterEndpoint extends JSONRPC.NodeClusterBase.MasterEndpoint
 
 			if(this._promiseRunningTests === null)
 			{
+				cluster.on(
+					"exit", 
+					(worker, nExitCode, nKillSignal) => {
+						if(nExitCode !== 0)
+						{
+							console.error(`One of the workers has exited with code ${nExitCode} and kill signal ${nKillSignal}. Testing failed.`);
+							process.exit(1);
+						}
+					}
+				);
+				
 				this._promiseRunningTests = new AllTests(this._strCacheDirectoryPath, this).runTests(this._strCacheDirectoryPath, this);
 			}
 		}

@@ -96,7 +96,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 				{
 					const strIndex = `
 						<a href="/200-OK.10MB-10seconds.bin">/200-OK.10MB-10seconds.bin</a><br>
-						<a href="/200-OK.5MB-5seconds-ConnectionReset.bin">/200-OK.5MB-5seconds-ConnectionReset.bin</a><br>
+						<a href="/200-OK.1MB-1seconds-ConnectionReset.bin">/200-OK.1MB-1seconds-ConnectionReset.bin</a><br>
 						<a href="/401-Unauthorized">/401-Unauthorized</a><br>
 						<a href="/403-Forbidden">/403-Forbidden</a><br>
 						<a href="/500-InternalServerError">/500-InternalServerError</a><br>
@@ -160,7 +160,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 
 				// After this, the temporary download file should be cleaned up after losing the connection.
 				// The test HTTP client should be configured to timeout fast.
-				else if(strRelativeFilePath === "/200-OK.5MB-5seconds-ConnectionReset.bin")
+				else if(strRelativeFilePath === "/200-OK.1MB-1seconds-ConnectionReset.bin")
 				{
 					const nSizeBytes = WorkerEndpoint.minimumCacheableSizeBytes;
 					const nSizeBytesIncrement = parseInt(WorkerEndpoint.minimumCacheableSizeBytes / 10, 10);
