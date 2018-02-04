@@ -82,10 +82,13 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 
 		const strCacheDirectoryPath = await this.masterClient.cacheDirectoryPath();
 
-
+		// Low level control of headers, errors and transfer time, to simulate certain scenarios, 
+		// including staged (guaranteed) concurrency and clashing of OS specific file locking.
 		this._httpStaticFileServerSimulator = http.createServer(async (incomingRequest, serverResponse) => {
 			const objParsedURL = url.parse(incomingRequest.url);
 			const strRelativeFilePath = objParsedURL.pathname;
+
+			console.log("[" + process.pid + "] Static HTTP server, " + incomingRequest.method + " " + incomingRequest.url);
 
 			if(incomingRequest.method === "GET" || incomingRequest.method === "HEAD" || incomingRequest.method === "OPTIONS")
 			{
@@ -103,12 +106,21 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 					`;
 
 					serverResponse.statusCode = 200;
-					serverResponse.setHeader("content-length", strIndex.length);
-					serverResponse.setHeader("content-type", "text/html");
 
-					serverResponse.write(strIndex, "utf8", () => {
+					if(incomingRequest.method === "GET")
+					{
+						serverResponse.setHeader("content-length", strIndex.length);
+						serverResponse.setHeader("content-type", "text/html");
+
+						serverResponse.write(strIndex, "utf8", () => {
+							serverResponse.end();
+							console.log("[" + process.pid + "] Static HTTP server, .end() served " + incomingRequest.method + " " + incomingRequest.url);
+						});
+					}
+					else
+					{
 						serverResponse.end();
-					});
+					}
 				}
 
 				// This file will be served over a period of 1MB/s (10 seconds == 10 MB)
@@ -143,6 +155,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 					}
 
 					serverResponse.end();
+					console.log("[" + process.pid + "] Static HTTP server, .end() served " + incomingRequest.method + " " + incomingRequest.url);
 				}
 
 				// After this, the temporary download file should be cleaned up after losing the connection.
@@ -169,7 +182,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 
 							await sleep(1000);
 
-							console.log("Simulating connection reset, destroying incoming socket.");
+							console.log("[" + process.pid + "] Static HTTP server, simulating connection reset, destroying incoming socket.");
 							incomingRequest.socket.end();
 							incomingRequest.socket.destroy();
 
@@ -177,6 +190,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 							{
 								// Maybe cleans up.
 								serverResponse.end();
+								console.log("[" + process.pid + "] Static HTTP server, .socket.end() (connection reset) " + incomingRequest.method + " " + incomingRequest.url);
 							}
 							catch(error)
 							{
@@ -204,6 +218,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 						serverResponse.setHeader("content-type", "text/plain");
 						serverResponse.write(`${strRelativeFilePath} does not feel the same way about you personally!`, "utf8", () => {
 							serverResponse.end();
+							console.log("[" + process.pid + "] Static HTTP server, served " + incomingRequest.method + " " + incomingRequest.url);
 						});
 					}
 					else
@@ -221,6 +236,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 						serverResponse.setHeader("content-type", "text/plain");
 						serverResponse.write(`${strRelativeFilePath} is not allowed from the internet!`, "utf8", () => {
 							serverResponse.end();
+							console.log("[" + process.pid + "] Static HTTP server, served " + incomingRequest.method + " " + incomingRequest.url);
 						});
 					}
 					else
@@ -238,6 +254,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 						serverResponse.setHeader("content-type", "text/plain");
 						serverResponse.write(`${strRelativeFilePath} has crashed!`, "utf8", () => {
 							serverResponse.end();
+							console.log("[" + process.pid + "] Static HTTP server, served " + incomingRequest.method + " " + incomingRequest.url);
 						});
 					}
 					else
@@ -255,6 +272,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 						serverResponse.setHeader("content-type", "text/plain");
 						serverResponse.write("this._httpProxyCacheConnectionRefused.processHTTPRequest() proxied the request and reached a file server. This must not happen.", "utf8", () => {
 							serverResponse.end();
+							console.log("[" + process.pid + "] Static HTTP server, " + incomingRequest.method + " " + incomingRequest.url);
 						});
 					}
 					else
@@ -273,6 +291,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 					{
 						// Maybe cleans up.
 						serverResponse.end();
+						console.log("[" + process.pid + "] Static HTTP server, " + incomingRequest.method + " " + incomingRequest.url);
 					}
 					catch(error)
 					{
@@ -290,6 +309,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 						serverResponse.setHeader("content-type", "text/plain");
 						serverResponse.write(`${strRelativeFilePath} not found.`, "utf8", () => {
 							serverResponse.end();
+							console.log("[" + process.pid + "] Static HTTP server, 404 for " + incomingRequest.method + " " + incomingRequest.url);
 						});
 					}
 					else
@@ -326,20 +346,12 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 			const objParsedURL = url.parse(incomingRequest.url);
 			const strRelativeFilePath = objParsedURL.pathname;
 
-			if(strRelativeFilePath === "/GatewayConnectionRefused")
-			{
-				this._httpProxyCacheConnectionRefused.processHTTPRequest(incomingRequest, serverResponse).catch((error) => {
-					console.error(error);
-					process.exit(1);
-				});
-			}
-			else
-			{
-				this._httpProxyCache.processHTTPRequest(incomingRequest, serverResponse).catch((error) => {
-					console.error(error);
-					process.exit(1);
-				});
-			}
+			console.log("[" + process.pid + "] Proxy cached HTTP server, " + incomingRequest.method + " " + incomingRequest.url);
+
+			(strRelativeFilePath === "/GatewayConnectionRefused" ? this._httpProxyCacheConnectionRefused : this._httpProxyCache).processHTTPRequest(incomingRequest, serverResponse).catch((error) => {
+				console.error(error);
+				process.exit(1);
+			});
 		});
 
 		this._httpServerForCachedProxy.listen(WorkerEndpoint.httpCachedProxyServerPort, WorkerEndpoint.httpListenHostname);

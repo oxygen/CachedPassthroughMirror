@@ -57,12 +57,12 @@ class HTTPProxyCache
 				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
 				let bSkipCacheWrite = false;
 				let bSkipStorageCache = false;
-				let bCachedFileExists = fs.existsSync(strCachedFilePath);
+				// let bCachedFileExists = fs.existsSync(strCachedFilePath);
 				let cachedFileStats = null;
 
-				if(bCachedFileExists)
+				if(fs.existsSync(strCachedFilePath))
 				{
-					cachedFileStats = await fs.stat(strCachedFilePath);
+					cachedFileStats = fs.statSync(strCachedFilePath);
 				}
 
 				if(
@@ -145,7 +145,19 @@ class HTTPProxyCache
 						)
 						{
 							console.error("HEAD request status code " + JSON.stringify(_incomingMessageHEAD.statusCode) + ", deleting existing cached file.");
-							fs.unlink(strCachedFilePath).catch(console.error);
+							
+							cachedFileStats = null;
+							try
+							{
+								await fs.unlink(strCachedFilePath);
+							}
+							catch(error)
+							{
+								if(error.code !== "ENOENT")
+								{
+									console.error(error);
+								}
+							}
 						}
 						
 						if(
@@ -153,19 +165,40 @@ class HTTPProxyCache
 							|| _incomingMessageHEAD.statusCode > 299
 						)
 						{
-							console.error("HEAD request status code " + JSON.stringify(_incomingMessageHEAD.statusCode) + ", skipping cache write.");
-							bSkipCacheWrite = true;
+							if(!fs.existsSync(strCachedFilePath))
+							{
+								serverResponse.statusCode = _incomingMessageHEAD.statusCode ? _incomingMessageHEAD.statusCode : 500;
+								serverResponse.write("HEAD request failed and there is no cached file.");
+								serverResponse.end();
+
+								return;
+							}
+							else
+							{
+								console.error("HEAD request status code " + JSON.stringify(_incomingMessageHEAD.statusCode) + ". Skipping cache write.");
+								bSkipCacheWrite = true;
+							}
 						}
 					}
 					catch(error)
 					{
 						console.error(error);
-
-						console.error("HEAD request failed with error.");
-						console.error(error);
+						
 						bSkipCacheWrite = true;
+
+						if(!fs.existsSync(strCachedFilePath))
+						{
+							console.error("HEAD request failed with thrown error and there is no cached file. Proxying the HTTP code and returning.");
+
+							serverResponse.statusCode = 500;
+							serverResponse.write(error.message + "\r\n" + error.stack);
+							serverResponse.end();
+
+							return;
+						}
 					}
 				}
+
 
 				if(
 					!bSkipCacheWrite
@@ -207,7 +240,22 @@ class HTTPProxyCache
 							
 							if(!fs.existsSync(strPathSoFar))
 							{
-								fs.mkdirSync(strPathSoFar);
+								try
+								{
+									await fs.mkdir(strPathSoFar);
+								}
+								catch(error)
+								{
+									if(error.code !== "EEXIST")
+									{
+										console.error(error);
+
+										serverResponse.statusCode = 500;
+										serverResponse.end();
+
+										throw error;
+									}
+								}
 							}
 						}
 
@@ -271,7 +319,15 @@ class HTTPProxyCache
 									req.end();
 								});
 							}
+							else
+							{
+								// Not waiting for the cache to be written, cause for a long wait HTTP clients may time out.
+								// Proxying the request around the cache system, while it is being populated, triggered by another previous request.
+								this._proxyRequest(incomingRequest, serverResponse);
+								return;
+							}
 
+							//console.log("bSkipCacheWrite", bSkipCacheWrite, "content-length", _incomingMessageHEAD.headers["content-length"]);
 							await this._objOngoingCacheWrites[strCachedFilePath];
 						}
 						catch(error)
@@ -285,22 +341,41 @@ class HTTPProxyCache
 							return;
 						}
 
-						cachedFileStats = await fs.stat(strCachedFilePath + strSufixExtension);
+						if(!cachedFileStats && fs.existsSync(strCachedFilePath + strSufixExtension))
+						{
+							cachedFileStats = fs.statSync(strCachedFilePath + strSufixExtension);
+						}
 
 						// Check again, don't use bCachedFileExists.
 						if(
 							!fs.existsSync(strCachedFilePath)
+							&& fs.existsSync(strCachedFilePath + strSufixExtension)
 							&& parseInt(serverResponse.getHeader("content-length"), 10)
 							&& parseInt(cachedFileStats.size, 10) === parseInt(serverResponse.getHeader("content-length"), 10)
 						)
 						{
 							try
 							{
-								fs.renameSync(strCachedFilePath + strSufixExtension, strCachedFilePath);
+								await fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath);
 							}
 							catch(error)
 							{
-								console.error(error);
+								if(!fs.existsSync(strCachedFilePath))
+								{
+									try
+									{
+										await fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath);
+									}
+									catch(error)
+									{
+										console.error(error);
+
+										if(!fs.existsSync(strCachedFilePath + strSufixExtension))
+										{
+											return;
+										}
+									}
+								}
 							}
 							//await fs.rename(strCachedFilePath + strSufixExtension, strCachedFilePath);
 
@@ -310,18 +385,35 @@ class HTTPProxyCache
 							if(serverResponse.getHeader("last-modified"))
 							{
 								const nUnixTimeSeconds = Math.floor(new Date(serverResponse.getHeader("last-modified")).getTime() / 1000);
-								await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+								
+								if(fs.existsSync(strCachedFilePath))
+								{
+									try
+									{
+										await fs.utimes(strCachedFilePath, nUnixTimeSeconds, nUnixTimeSeconds);
+									}
+									catch(error)
+									{
+										console.error(error);
+									}
+								}
 							}
 						}
 						else
 						{
 							try
 							{
-								fs.unlinkSync(strCachedFilePath + strSufixExtension);
+								if(fs.existsSync(strCachedFilePath + strSufixExtension))
+								{
+									await fs.unlink(strCachedFilePath + strSufixExtension);
+								}
 							}
 							catch(error)
 							{
-								console.error(error);
+								if(error.code !== "ENOENT")
+								{
+									console.error(error);
+								}
 							}
 						}
 
@@ -347,7 +439,10 @@ class HTTPProxyCache
 
 						serverResponse.setHeader("content-type", "application/octet-stream");
 						
-						cachedFileStats = await fs.stat(strCachedFilePath);
+						if(!cachedFileStats && fs.existsSync(strCachedFilePath))
+						{
+							cachedFileStats = fs.statSync(strCachedFilePath);
+						}
 
 						serverResponse.setHeader("content-length", cachedFileStats.size);
 						serverResponse.setHeader("last-modified", (new Date(cachedFileStats.mtimeMs)).toUTCString());
@@ -399,6 +494,18 @@ class HTTPProxyCache
 				}
 			}
 		}
+
+		this._proxyRequest(incomingRequest, serverResponse);
+	}
+
+
+	/**
+	 * @param {http.IncomingRequest} incomingRequest 
+	 * @param {http.ServerResponse} serverResponse 
+	 */
+	_proxyRequest(incomingRequest, serverResponse)
+	{
+		console.log("Proxying " + incomingRequest.method + " " + incomingRequest.url);
 
 		this._proxy.web(
 			incomingRequest, 

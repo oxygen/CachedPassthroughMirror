@@ -18,7 +18,7 @@ class MasterEndpoint extends JSONRPC.NodeClusterBase.MasterEndpoint
 		this._strCacheDirectoryPath = strCacheDirectoryPath;
 		console.log("Cache directory path: " + this._strCacheDirectoryPath);
 
-		// this._nMaxWorkersCount = 1;
+		this._nMaxWorkersCount = 1;
 
 		this._promiseRunningTests = null;
 	}
@@ -83,7 +83,7 @@ class MasterEndpoint extends JSONRPC.NodeClusterBase.MasterEndpoint
 
 			if(this._promiseRunningTests === null)
 			{
-				this._promiseRunningTests = new AllTests().runTests(this._strCacheDirectoryPath);
+				this._promiseRunningTests = new AllTests(this._strCacheDirectoryPath, this).runTests(this._strCacheDirectoryPath, this);
 			}
 		}
 	}

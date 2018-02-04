@@ -41,19 +41,5 @@ process.on(
 			this.workerEndpoint = new WorkersRPC.WorkerEndpoint();
 			await this.workerEndpoint.start();
 		}
-
-
-		if(cluster.isMaster)
-		{
-			//let allTests = new AllTests();
-			// await allTests.runTests();
-
-			console.log("[" + process.pid + "] Done!!!");
-		}
-		else
-		{
-		}
-		
-		// process.exit(0);
 	}
 )();
