@@ -5,6 +5,7 @@ const MasterClient = require("./MasterClient");
 
 const http = require("http");
 const url = require("url");
+const assert = require("assert");
 
 const sleep = require("sleep-promise");
 
@@ -23,6 +24,8 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 		// Running in a worker to also test multi process concurrency over the same cache directory path.
 		this._httpCachedProxy = null;
 		this._httpServerForCachedProxy = null;
+
+		this._bConnectionRefusedMode = false;
 	}
 
 
@@ -348,7 +351,12 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 
 			console.log("[" + process.pid + "] Proxy cached HTTP server, " + incomingRequest.method + " " + incomingRequest.url);
 
-			(strRelativeFilePath === "/GatewayConnectionRefused" ? this._httpProxyCacheConnectionRefused : this._httpProxyCache).processHTTPRequest(incomingRequest, serverResponse).catch((error) => {
+			(
+				strRelativeFilePath === "/GatewayConnectionRefused" 
+				|| this._bConnectionRefusedMode 
+					? this._httpProxyCacheConnectionRefused 
+					: this._httpProxyCache
+			).processHTTPRequest(incomingRequest, serverResponse).catch((error) => {
 				console.error(error);
 				process.exit(1);
 			});
@@ -373,5 +381,17 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 
 		this._httpStaticFileServerSimulator = null;
 		this._httpServerForCachedProxy = null;
+	}
+
+
+	/**
+	 * @param {JSONRPC.IncomingRequest} incomingRequest 
+	 * @param {boolean} bEnabled
+	 */
+	async setConnectionRefusedMode(incomingRequest, bEnabled)
+	{
+		assert(typeof bEnabled === "boolean");
+
+		this._bConnectionRefusedMode = bEnabled;
 	}
 };

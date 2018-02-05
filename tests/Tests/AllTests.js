@@ -42,11 +42,23 @@ class AllTests
 		await this.manyParallel200OKRequests();
 		
 		assert(fs.existsSync(strTestFile), `Was expecting ${strTestFile} to exist`);
-		assert((await fs.stat(strTestFile)).size === 10 * 1024 * 1024, `Was expecting ${strTestFile} to have a 10 MB size.`);
+		assert((await fs.stat(strTestFile)).size === WorkerEndpoint.minimumCacheableSizeBytes, `Was expecting ${strTestFile} to have a 10 MB size.`);
 
 
 		// Once again with the file in the cache.
 		await this.manyParallel200OKRequests();
+
+
+		// Once again with the file in the cache with the static HTTP repo down.
+		for(let mxKey in this._masterEndpoint.workerClients)
+		{
+			await this._masterEndpoint.workerClients[mxKey].client.setConnectionRefusedMode(true);
+		}
+		await this.manyParallel200OKRequests();
+		for(let mxKey in this._masterEndpoint.workerClients)
+		{
+			await this._masterEndpoint.workerClients[mxKey].client.setConnectionRefusedMode(false);
+		}
 		
 		
 		const strNukeFilePath = path.join(this._strCacheDirectoryPath, "some-file-not-on-the-repo");
@@ -61,7 +73,7 @@ class AllTests
 		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/200-OK.10MB-10seconds.bin?129831798792792"), 200);
 
 		// The temporary download file must not persist in the cache folder.
-		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/200-OK.1MB-1seconds-ConnectionReset.bin", 200, 1 * 1024 * 1024));
+		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/200-OK.1MB-1seconds-ConnectionReset.bin", 200, parseInt(WorkerEndpoint.minimumCacheableSizeBytes / 10, 10)));
 
 		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/401-Unauthorized"), 401);
 
@@ -118,7 +130,7 @@ class AllTests
 
 		for(let i = 0; i < arrPromisesBufferBody.length; i++)
 		{
-			assert((await arrPromisesBufferBody[i]).length === 10 * 1024 * 1024, "Body was suposed to be 10 MB");
+			assert((await arrPromisesBufferBody[i]).length === WorkerEndpoint.minimumCacheableSizeBytes, "Body was suposed to be 10 MB");
 		}
 
 		console.log("Finished the " + arrManyParallelFetchPromises.length + " requests.");
