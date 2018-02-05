@@ -232,33 +232,7 @@ class HTTPProxyCache
 					{
 						bSkipStorageCache = true;
 
-						// Synchronous mode to almost guarantee no concurrency in creating the missing directories.
-						let strPathSoFar = "";
-
-						for(let strFolderName of path.dirname(strCachedFilePath).split(path.sep))
-						{
-							strPathSoFar += strFolderName + path.sep;
-							
-							if(!fs.existsSync(strPathSoFar))
-							{
-								try
-								{
-									await fs.mkdir(strPathSoFar);
-								}
-								catch(error)
-								{
-									if(error.code !== "EEXIST")
-									{
-										console.error(error);
-
-										serverResponse.statusCode = 500;
-										serverResponse.end();
-
-										throw error;
-									}
-								}
-							}
-						}
+						await HTTPProxyCache.mkdirRecursive(path.dirname(strCachedFilePath));
 
 						const strSufixExtension = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
 
@@ -607,6 +581,8 @@ class HTTPProxyCache
 							if(this._objOngoingCacheWrites[strCachedFilePath] === undefined)
 							{
 								this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
+									await HTTPProxyCache.mkdirRecursive(path.dirname(strCachedFilePath));
+
 									const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
 
 									wstream.on("error",	fnReject);
@@ -619,7 +595,7 @@ class HTTPProxyCache
 											try
 											{
 												await sleep(20);
-												
+
 												wstream.end();
 
 												await this._renameTempToFinal(
@@ -662,6 +638,37 @@ class HTTPProxyCache
 		catch(error)
 		{
 			console.error(error);
+		}
+	}
+
+
+	/**
+	 * @param {string} strDirectoryPath 
+	 * 
+	 * @returns {undefined}
+	 */
+	static async mkdirRecursive(strDirectoryPath)
+	{
+		let strPathSoFar = "";
+
+		for(let strFolderName of strDirectoryPath.split(path.sep))
+		{
+			strPathSoFar += strFolderName + path.sep;
+			
+			if(!fs.existsSync(strPathSoFar))
+			{
+				try
+				{
+					await fs.mkdir(strPathSoFar);
+				}
+				catch(error)
+				{
+					if(error.code !== "EEXIST")
+					{
+						throw error;
+					}
+				}
+			}
 		}
 	}
 };
