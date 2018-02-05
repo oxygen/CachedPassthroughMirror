@@ -616,11 +616,12 @@ class HTTPProxyCache
 									wstream.on(
 										"finish",
 										async() => {
-											await sleep(20);
-											wstream.end();
-
 											try
 											{
+												await sleep(20);
+												
+												wstream.end();
+
 												await this._renameTempToFinal(
 													strCachedFilePath, 
 													strSufixExtension, 
