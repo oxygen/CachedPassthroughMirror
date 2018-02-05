@@ -22,10 +22,12 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 		
 		// The being tested component. 
 		// Running in a worker to also test multi process concurrency over the same cache directory path.
-		this._httpCachedProxy = null;
+		this._httpProxyCache = null;
+		this._httpProxyCacheConnectionRefused = null;
 		this._httpServerForCachedProxy = null;
 
 		this._bConnectionRefusedMode = false;
+		this._bHidePrefetchTxt = false;
 	}
 
 
@@ -116,6 +118,37 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 						serverResponse.setHeader("content-type", "text/html");
 
 						serverResponse.write(strIndex, "utf8", () => {
+							serverResponse.end();
+							console.log("[" + process.pid + "] Static HTTP server, .end() served " + incomingRequest.method + " " + incomingRequest.url);
+						});
+					}
+					else
+					{
+						serverResponse.end();
+					}
+				}
+				else if(strRelativeFilePath === "/cache_prefetch.txt" && !this._bHidePrefetchTxt)
+				{
+					const strFileContents = `
+						200-OK.10MB-10seconds.bin
+						200-OK.1MB-1seconds-ConnectionReset.bin
+						401-Unauthorized
+						403-Forbidden
+						500-InternalServerError
+
+						GatewayConnectionRefused
+						404-test
+						200-OK.10MB-10seconds.bin
+					`;
+
+					serverResponse.statusCode = 200;
+
+					if(incomingRequest.method === "GET")
+					{
+						serverResponse.setHeader("content-length", strFileContents.length);
+						serverResponse.setHeader("content-type", "text/html");
+
+						serverResponse.write(strFileContents, "utf8", () => {
 							serverResponse.end();
 							console.log("[" + process.pid + "] Static HTTP server, .end() served " + incomingRequest.method + " " + incomingRequest.url);
 						});
@@ -393,5 +426,23 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 		assert(typeof bEnabled === "boolean");
 
 		this._bConnectionRefusedMode = bEnabled;
+	}
+
+
+	/**
+	 * @param {JSONRPC.IncomingRequest} incomingRequest
+	 */
+	async deletePrefetchTxt(incomingRequest)
+	{
+		this._bHidePrefetchTxt = true;
+	}
+
+
+	/**
+	 * @param {JSONRPC.IncomingRequest} incomingRequest 
+	 */
+	async sync(incomingRequest)
+	{
+		return this._httpProxyCache.sync();
 	}
 };

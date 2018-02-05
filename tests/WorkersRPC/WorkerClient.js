@@ -13,4 +13,22 @@ class WorkerClient extends JSONRPC.NodeClusterBase.WorkerClient
 	{
 		return this.rpc("setConnectionRefusedMode", [...arguments]);
 	}
+
+
+	/**
+	 * @returns {undefined}
+	 */
+	async sync()
+	{
+		return this.rpc("sync", [...arguments]);
+	}
+
+
+	/**
+	 * @returns {undefined}
+	 */
+	async deletePrefetchTxt()
+	{
+		return this.rpc("deletePrefetchTxt", [...arguments]);
+	}
 };

@@ -6,19 +6,19 @@ Writes to the cache and serves the large files at the same time ([stream-copy](h
 
 Uses [http-proxy](https://github.com/nodejitsu/node-http-proxy) for the HTTP proxy part.
 
-This cache saves bandwidth not latency.
+This cache saves bandwidth (or speeds up transfers) and makes some files highly available locally (prefetch).
 
-It replicates the directory structure of the target server, only for the cached files (which meet or exceed `nBytesMinimumFileSize`).
+It replicates the directory structure of the target server, only for the cached files (which have at least `nBytesMinimumFileSize`).
 
 The `Content-length` and `Last-modified` headers (from a `HEAD` request to the target server) are used to determine if the cached file is to be invalided. __The `HEAD` request is always made__ and so is depended upon (to proxy updated headers and for immediate cache invalidation).
 
 There are no plans to add non-ASCII characters support or saving of headers, or 100% independent mirror capabilities.
 
-So far tested on Windows and Ubuntu. Should work without issues on all platforms though.
+Place a file with whitespace separated file paths (URL encoded), named `cache_prefetch.txt`, in the root of the target URL base path and then call the `.sync()` method of the `HTTPProxyCache` class to prefetch or update the list of files.
 
 __Security WARNING:__ HTTP authorization skip: when the HEAD request fails either with a non-200 HTTP status code or at network level (or something else), and the file is served directly from the cache storage, there will be no HTTP authorization. This might be fixed in the future, but at the present time, it presents a risk where security matters.
 
-@TODO: write tests, examples, CLI endpoint, etc.
+@TODO: write examples, CLI endpoint, etc.
 
 Usage
 =====

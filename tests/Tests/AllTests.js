@@ -4,7 +4,6 @@ const cluster = require("cluster");
 const fetch = require("node-fetch");
 const fs = require("fs-promise");
 const path = require("path");
-const os = require("os");
 
 const WorkerEndpoint = require("../WorkersRPC/WorkerEndpoint");
 
@@ -61,12 +60,65 @@ class AllTests
 		}
 		
 		
-		const strNukeFilePath = path.join(this._strCacheDirectoryPath, "some-file-not-on-the-repo");
+		let strNukeFilePath = path.join(this._strCacheDirectoryPath, "some-file-not-on-the-repo");
 		assert(!fs.existsSync(strNukeFilePath), `Was expecting ${strNukeFilePath} NOT to exist`);
 		fs.closeSync(fs.openSync(strNukeFilePath, "w"));
 		assert(fs.existsSync(strNukeFilePath), `Was expecting ${strNukeFilePath} to exist`);
 		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/some-file-not-on-the-repo"), 404);
 		assert(!fs.existsSync(strNukeFilePath), `Was expecting ${strNukeFilePath} NOT to exist anymore.`);
+
+
+		strNukeFilePath = path.join(this._strCacheDirectoryPath, "some-file-not-on-the-repo");
+		const strCreateFilePath = path.join(this._strCacheDirectoryPath, "200-OK.10MB-10seconds.bin");
+		if(fs.existsSync(strCreateFilePath))
+		{
+			fs.unlinkSync(strCreateFilePath);
+		}
+		assert(!fs.existsSync(strNukeFilePath), `Was expecting ${strNukeFilePath} NOT to exist`);
+		fs.closeSync(fs.openSync(strNukeFilePath, "w"));
+		assert(fs.existsSync(strNukeFilePath), `Was expecting ${strNukeFilePath} to exist`);
+		for(let mxKey in this._masterEndpoint.workerClients)
+		{
+			await this._masterEndpoint.workerClients[mxKey].client.sync();
+			break;
+		}
+		assert(!fs.existsSync(strNukeFilePath), `Was expecting ${strNukeFilePath} NOT to exist anymore.`);
+		assert(fs.existsSync(strCreateFilePath), `Was expecting ${strCreateFilePath} to exist now.`);
+
+
+		for(let mxKey in this._masterEndpoint.workerClients)
+		{
+			assert(fs.existsSync(strCreateFilePath), `Was expecting ${strCreateFilePath} to exist.`);
+			
+			// Timeout in 8 seconds, before the 10 seconds download time.
+			// If the timeout is reached, then the file on disk was updated incorrectly as it didn't change.
+			// Yes this is normally a race condition, however it is good enough for this test and not expecting any load!
+			const nTimeoutID = setTimeout(
+				() => {
+					throw new Error(`${strCreateFilePath} was updated incorrectly by .sync(), as it didn't change.`);
+				},
+				8000
+			);
+			await this._masterEndpoint.workerClients[mxKey].client.sync();
+			assert(fs.existsSync(strCreateFilePath), `Was expecting ${strCreateFilePath} to still exist.`);
+			clearTimeout(nTimeoutID);
+
+
+			fs.unlinkSync(strCreateFilePath);
+			// Make it 0 bytes.
+			fs.closeSync(fs.openSync(strCreateFilePath, "w"));
+			await this._masterEndpoint.workerClients[mxKey].client.sync();
+			assert(fs.existsSync(strCreateFilePath), `Was expecting ${strCreateFilePath} to still exist.`);
+			assert((await fs.stat(strCreateFilePath)).size === WorkerEndpoint.minimumCacheableSizeBytes, `Was expecting ${strCreateFilePath} to have a 10 MB size.`);
+
+
+			await this._masterEndpoint.workerClients[mxKey].client.deletePrefetchTxt();
+			// At this point, only deleting will work.
+			await this._masterEndpoint.workerClients[mxKey].client.sync();
+
+			assert(fs.existsSync(strCreateFilePath), `Was expecting ${strCreateFilePath} to still exist.`);
+			break;
+		}
 
 
 		// Should be must faster than 10 seconds, it needs to come from the cache.
@@ -96,6 +148,8 @@ class AllTests
 
 		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/404"), 404);
 
+		fs.removeSync(this._strCacheDirectoryPath);
+
 		console.log("[" + process.pid + "] Done!!!");
 		this._masterEndpoint.gracefulExit(/*incomingRequest*/ undefined);
 	}
@@ -107,7 +161,7 @@ class AllTests
 	async manyParallel200OKRequests()
 	{
 		const arrManyParallelFetchPromises = [];
-		for(let i = 0; i < os.cpus().length * 10; i++)
+		for(let i = 0; i < 30; i++)
 		{
 			arrManyParallelFetchPromises.push(fetch(this._strRootCachedURL + "/200-OK.10MB-10seconds.bin?i=" + i));
 		}
