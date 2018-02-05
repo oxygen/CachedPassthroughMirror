@@ -581,6 +581,8 @@ class HTTPProxyCache
 							if(this._objOngoingCacheWrites[strCachedFilePath] === undefined)
 							{
 								this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
+									console.log(`Prefetching or updating ${strCachedFilePath}.`);
+
 									await HTTPProxyCache.mkdirRecursive(path.dirname(strCachedFilePath));
 
 									const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
