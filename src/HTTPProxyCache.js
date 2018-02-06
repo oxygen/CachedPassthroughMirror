@@ -144,6 +144,11 @@ class HTTPProxyCache
 							
 							// check again, don't use bCachedFileExists
 							&& fs.existsSync(strCachedFilePath)
+							
+							// Asked by developers to be able to put files in the cache and not have them deleted if not found on the repo.
+							&& path.extname(strCachedFilePath) !== ".keep"
+							&& !fs.existsSync(strCachedFilePath + ".keep")
+
 							&& !cachedFileStats.isDirectory()
 						)
 						{
@@ -497,9 +502,9 @@ class HTTPProxyCache
 	{
 		const arrFilePaths = await dir.promiseFiles(this._strCacheDirectoryRootPath);
 
-		for(let strFilePath of arrFilePaths)
+		for(let strFilePathAbsolute of arrFilePaths)
 		{
-			strFilePath = path.relative(this._strCacheDirectoryRootPath, strFilePath);
+			let strFilePath = path.relative(this._strCacheDirectoryRootPath, strFilePathAbsolute);
 
 			try
 			{
@@ -511,7 +516,13 @@ class HTTPProxyCache
 				const fetchHeadResponse = await fetch(this._strTargetURLBasePath + strFilePath, {method: "HEAD"});
 				fetchHeadResponse.text().catch(console.error);
 
-				if(parseInt(fetchHeadResponse.status, 10) === 404)
+				if(
+					parseInt(fetchHeadResponse.status, 10) === 404
+
+					// Asked by developers to be able to put files in the cache and not have them deleted if not found on the repo.
+					&& path.extname(strFilePathAbsolute) !== ".keep"
+					&& !fs.existsSync(strFilePathAbsolute + ".keep")
+				)
 				{
 					await fs.unlink(path.join(this._strCacheDirectoryRootPath, strFilePath));
 				}
@@ -572,6 +583,15 @@ class HTTPProxyCache
 						else
 						{
 							bNeedsUpdate = true;
+						}
+
+						// Asked by developers to be able to put files in the cache and not have them deleted if not found on the repo.
+						if(
+							path.extname(strCachedFilePath) === ".keep"
+							|| fs.existsSync(strCachedFilePath + ".keep")
+						)
+						{
+							bNeedsUpdate = false;
 						}
 
 						if(bNeedsUpdate)

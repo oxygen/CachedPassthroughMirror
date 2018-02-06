@@ -106,6 +106,7 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 						<a href="/403-Forbidden">/403-Forbidden</a><br>
 						<a href="/500-InternalServerError">/500-InternalServerError</a><br>
 						<a href="/GatewayConnectionRefused">/GatewayConnectionRefused</a><br>
+						<a href="/cache_prefetch.txt">/cache_prefetch.txt</a>
 						<a href="/404">/404</a><br>
 						<a href="/../404">/../404</a>
 					`;

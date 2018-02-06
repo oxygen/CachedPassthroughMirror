@@ -34,6 +34,11 @@ class AllTests
 
 		assert(cluster.isMaster, "Expecting cluster.isMaster to be true.");
 
+
+		const strFileToKeep = path.join(this._strCacheDirectoryPath, "cache_override.empty");
+		fs.closeSync(fs.openSync(strFileToKeep, "w"));
+		fs.closeSync(fs.openSync(strFileToKeep + ".keep", "w"));
+
 		
 		const strTestFile = path.join(this._strCacheDirectoryPath, "200-OK.10MB-10seconds.bin");
 
@@ -147,6 +152,11 @@ class AllTests
 		}
 
 		await this.testValidHTTPResponse(await fetch(this._strRootCachedURL + "/404"), 404);
+
+
+		assert(fs.existsSync(strFileToKeep), `Was expecting ${strFileToKeep} to persist.`);
+		assert(fs.existsSync(strFileToKeep + ".keep"), `Was expecting ${strFileToKeep + ".keep"} to persist.`);
+
 
 		fs.removeSync(this._strCacheDirectoryPath);
 

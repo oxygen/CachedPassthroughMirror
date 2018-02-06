@@ -12,6 +12,8 @@ It replicates the directory structure of the target server, only for the cached 
 
 The `Content-length` and `Last-modified` headers (from a `HEAD` request to the target server) are used to determine if the cached file is to be invalided. __The `HEAD` request is always made__ and so is depended upon (to proxy updated headers and for immediate cache invalidation).
 
+To prevent cache invalidation (deletion of files which respond with 404 on HTTP or updating of files which changes) place an empty file next to the file that needs to persist, sufixed with .keep, like this: `[original path name].keep`.
+
 There are no plans to add non-ASCII characters support or saving of headers, or 100% independent mirror capabilities.
 
 Place a file with whitespace separated file paths (URL encoded), named `cache_prefetch.txt`, in the root of the target URL base path and then call the `.sync()` method of the `HTTPProxyCache` class to prefetch or update the list of files.
