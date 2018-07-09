@@ -1,3 +1,5 @@
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Foxygen%2FCachedPassthroughMirror.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Foxygen%2FCachedPassthroughMirror?ref=badge_shield)
+
 Cached passthrough HTTP mirror
 ==============================
 Very simple HTTP passthrough mirror (proxy) with an aggresive cache for large files (ignores cache headers and caches everything larger than a specified minimum size). Originally written to cache large files to accelerate some repetitive operations.
@@ -45,3 +47,7 @@ Usage
 
 	httpServer.listen(8008, "127.0.0.1");
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Foxygen%2FCachedPassthroughMirror.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Foxygen%2FCachedPassthroughMirror?ref=badge_large)
