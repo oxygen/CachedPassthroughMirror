@@ -71,6 +71,14 @@ class HTTPProxyCache
 				// let bCachedFileExists = fs.existsSync(strCachedFilePath);
 				let cachedFileStats = null;
 
+				
+				if(incomingRequest.headers["authorization"] || incomingRequest.headers["proxy-authorization"] || incomingRequest.headers["www-authenticate"])
+				{
+					bSkipCacheWrite = true;
+					bSkipStorageCache = true;
+				}
+
+
 				if(fs.existsSync(strCachedFilePath))
 				{
 					cachedFileStats = fs.statSync(strCachedFilePath);
