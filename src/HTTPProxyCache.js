@@ -165,6 +165,7 @@ class HTTPProxyCache
 							cachedFileStats = null;
 							try
 							{
+								console.log(`Deleting ${strCachedFilePath} because HTTP server returned 404 Not Found for ${this._strTargetURLBasePath + objParsedURL.path.substr(1)}`);
 								await fs.unlink(strCachedFilePath);
 							}
 							catch(error)
@@ -455,6 +456,7 @@ class HTTPProxyCache
 			{
 				if(fs.existsSync(strCachedFilePath + strSufixExtension))
 				{
+					console.log(`Deleting garbage file ${strCachedFilePath + strSufixExtension}`);
 					await fs.unlink(strCachedFilePath + strSufixExtension);
 				}
 			}
@@ -532,6 +534,7 @@ class HTTPProxyCache
 					&& !fs.existsSync(strFilePathAbsolute + ".keep")
 				)
 				{
+					console.log(`Deleting ${strFilePathAbsolute} because HTTP server returned 404 Not Found for ${this._strTargetURLBasePath + strFilePath}`);
 					await fs.unlink(path.join(this._strCacheDirectoryRootPath, strFilePath));
 				}
 			}
@@ -614,7 +617,8 @@ class HTTPProxyCache
 
 								try
 								{
-									fs.unlinkSync(strCachedFilePath);
+									console.log(`Deleting ${strCachedFilePath} because HTTP server returned file size ${parseInt(fetchHeadResponse.headers.get("content-length"), 10)} and file has size ${cachedFileStats.size} ${this._strTargetURLBasePath + strFilePath}`);
+									await fs.unlink(strCachedFilePath);
 								}
 								catch(error)
 								{

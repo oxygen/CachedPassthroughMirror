@@ -1,6 +1,6 @@
 {
   "name": "http-proxy-cache-lf",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Passthrough HTTP mirror with caching for large files.",
   "main": "index.js",
   "scripts": {
