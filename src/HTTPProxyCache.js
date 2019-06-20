@@ -544,15 +544,49 @@ class HTTPProxyCache
 
 		try
 		{
-			const fetchResponse = await fetch(this._strTargetURLBasePath /*already has a / suffix, see constructor*/ + "cache_prefetch.txt");
-			if(fetchResponse.ok && parseInt(fetchResponse.status, 10) === 200)
+			let strCachePrefetch;
+
+			if(
+				fs.existsSync(path.join(this._strCacheDirectoryRootPath, "cache_prefetch.txt"))
+				&& fs.existsSync(path.join(this._strCacheDirectoryRootPath, "cache_prefetch.txt.keep"))
+			)
+			{
+				strCachePrefetch = fs.readFileSync(path.join(this._strCacheDirectoryRootPath, "cache_prefetch.txt"), "utf8");
+			}
+			else
+			{
+				const fetchResponse = await fetch(this._strTargetURLBasePath /*already has a / suffix, see constructor*/ + "cache_prefetch.txt");
+				if(fetchResponse.ok && parseInt(fetchResponse.status, 10) === 200)
+				{
+					strCachePrefetch = (await fetchResponse.text()).split(/\s+/gm);
+					fs.writeFileSync(path.join(this._strCacheDirectoryRootPath, "cache_prefetch.txt"), strCachePrefetch);
+				}
+				else
+				{
+					if(fs.existsSync(path.join(this._strCacheDirectoryRootPath, "cache_prefetch.txt")))
+					{
+						strCachePrefetch = fs.readFileSync(path.join(this._strCacheDirectoryRootPath, "cache_prefetch.txt"), "utf8");
+					}
+					else
+					{
+						strCachePrefetch = "";
+					}
+				}
+			}
+
+			const arrPrefetchFilePaths = strCachePrefetch.replace(/^[ \t]+/gm, "").replace(/[ \t]+$/gm, "").trim().split(/\s+/gm);
+
+			if(arrPrefetchFilePaths.length)
 			{
 				try
 				{
-					const arrPrefetchFilePaths = (await fetchResponse.text()).split(/\s+/gm);
-
 					for(let strFilePath of arrPrefetchFilePaths)
 					{
+						if(strFilePath === "")
+						{
+							continue;
+						}
+						
 						while(strFilePath.substr(0, 1) === "/")
 						{
 							strFilePath = strFilePath.substr(1);
