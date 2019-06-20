@@ -615,14 +615,20 @@ class HTTPProxyCache
 							{
 								bNeedsUpdate = true;
 
-								try
+								if(
+									path.extname(strCachedFilePath) !== ".keep"
+									&& !fs.existsSync(strCachedFilePath + ".keep")
+								)
 								{
-									console.log(`Deleting ${strCachedFilePath} because HTTP server returned file size ${parseInt(fetchHeadResponse.headers.get("content-length"), 10)} and file has size ${cachedFileStats.size} ${this._strTargetURLBasePath + strFilePath}`);
-									await fs.unlink(strCachedFilePath);
-								}
-								catch(error)
-								{
-									console.error(error);
+									try
+									{
+										console.log(`Deleting ${strCachedFilePath} because HTTP server returned file size ${parseInt(fetchHeadResponse.headers.get("content-length"), 10)} and file has size ${cachedFileStats.size} ${this._strTargetURLBasePath + strFilePath}`);
+										await fs.unlink(strCachedFilePath);
+									}
+									catch(error)
+									{
+										console.error(error);
+									}
 								}
 							}
 						}
