@@ -558,7 +558,7 @@ class HTTPProxyCache
 				const fetchResponse = await fetch(this._strTargetURLBasePath /*already has a / suffix, see constructor*/ + "cache_prefetch.txt");
 				if(fetchResponse.ok && parseInt(fetchResponse.status, 10) === 200)
 				{
-					strCachePrefetch = (await fetchResponse.text()).split(/\s+/gm);
+					strCachePrefetch = await (await fetchResponse.text());
 					fs.writeFileSync(path.join(this._strCacheDirectoryRootPath, "cache_prefetch.txt"), strCachePrefetch);
 				}
 				else
