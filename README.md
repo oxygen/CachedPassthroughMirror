@@ -18,7 +18,7 @@ To prevent cache invalidation (deletion of files which respond with 404 on HTTP 
 
 There are no plans to add non-ASCII characters support or saving of headers, or 100% independent mirror capabilities.
 
-Place a file with whitespace separated file paths (URL encoded), named `cache_prefetch.txt`, in the root of the target URL base path and then call the `.sync()` method of the `HTTPProxyCache` class to prefetch or update the list of files.
+Place a file containing whitespace separated file paths (URL encoded), named `cache_prefetch.txt`, in the root of the target URL base path. `cache_prefetch.txt` is ignored unless you periodically call the `.sync()` method of the `HTTPProxyCache` class to prefetch or update the list of files.
 
 __Security WARNING:__ HTTP authorization skip: when the HEAD request fails either with a non-200 HTTP status code or at network level (or something else), and the file is served directly from the cache storage, there will be no HTTP authorization. This might be fixed in the future, but at the present time, it presents a risk where security matters.
 
