@@ -57,6 +57,13 @@ class HTTPProxyCache
 		// default.
 		serverResponse.statusCode = 200;
 
+
+		if(incomingRequest.headers["range"])
+		{
+			console.log(`Range header exists: ${incomingRequest.headers["range"]}. Will skip cache even if a .keep flag file exists. ${incomingRequest.url}`);
+		}
+
+
 		if(
 			incomingRequest.method === "GET"
 			&& !objParsedURL.pathname.includes("..")
@@ -116,204 +123,213 @@ class HTTPProxyCache
 				}
 
 
-				let fetchHeadResponse = null;
-				let headers = new fetch.Headers();
+				const bKeepFlagAndFileExists = (
+					fs.existsSync(strCachedFilePath)
+					&& fs.existsSync(strCachedFilePath + ".keep")
+				);
 
-				if(!bSkipCacheWrite)
+
+				if(!bKeepFlagAndFileExists)
 				{
-					try
+					let fetchHeadResponse = null;
+					let headers = new fetch.Headers();
+
+					if(!bSkipCacheWrite)
 					{
-						assert(this._objParsedTargetURL.path.substr(-1) === "/", "Path root sandbox must end in /");
-
-						for(let strHeaderName of ["range", "content-length", "user-agent", "authorization", "proxy-authorization", "www-authenticate", "accept", "accept-language", "cache-control", "cookie", "referer"])
-						{
-							if(incomingRequest.headers[strHeaderName] !== undefined)
-							{
-								headers.set(strHeaderName, incomingRequest.headers[strHeaderName]);
-							}
-						}
-
-						// Obtain headers with a HEAD request.
-						// Content-length is used to determine if the file is big enough to warrant caching.
-						// Last-modified is used to determine if the file has changed in the meantime.
 						try
 						{
-							fetchHeadResponse = await fetch(this._strTargetURLBasePath + objParsedURL.path.substr(1), {method: "HEAD", headers: headers});
-							fetchHeadResponse.text().catch(console.error);
-						}
-						catch(error)
-						{
-							console.error("fetch HEAD error: " + error.message);
-							fetchHeadResponse = {status: 0, error: error};
-						}
+							assert(this._objParsedTargetURL.path.substr(-1) === "/", "Path root sandbox must end in /");
 
-						if(
-							parseInt(fetchHeadResponse.status, 10) === 404
-							
-							// check again, don't use bCachedFileExists
-							&& fs.existsSync(strCachedFilePath)
-							
-							// Asked by developers to be able to put files in the cache and not have them deleted if not found on the repo.
-							&& path.extname(strCachedFilePath) !== ".keep"
-							&& !fs.existsSync(strCachedFilePath + ".keep")
+							for(let strHeaderName of ["range", "content-length", "user-agent", "authorization", "proxy-authorization", "www-authenticate", "accept", "accept-language", "cache-control", "cookie", "referer"])
+							{
+								if(incomingRequest.headers[strHeaderName] !== undefined)
+								{
+									headers.set(strHeaderName, incomingRequest.headers[strHeaderName]);
+								}
+							}
 
-							&& !cachedFileStats.isDirectory()
-						)
-						{
-							console.error("HEAD request status code " + JSON.stringify(fetchHeadResponse.status) + ", deleting existing cached file.");
-							
-							cachedFileStats = null;
+							// Obtain headers with a HEAD request.
+							// Content-length is used to determine if the file is big enough to warrant caching.
+							// Last-modified is used to determine if the file has changed in the meantime.
 							try
 							{
-								console.log(`Deleting ${strCachedFilePath} because HTTP server returned 404 Not Found for ${this._strTargetURLBasePath + objParsedURL.path.substr(1)}`);
-								await fs.unlink(strCachedFilePath);
+								fetchHeadResponse = await fetch(this._strTargetURLBasePath + objParsedURL.path.substr(1), {method: "HEAD", headers: headers});
+								fetchHeadResponse.text().catch(console.error);
 							}
 							catch(error)
 							{
-								if(error.code !== "ENOENT")
+								console.error("fetch HEAD error: " + error.message);
+								fetchHeadResponse = {status: 0, error: error};
+							}
+
+							if(
+								parseInt(fetchHeadResponse.status, 10) === 404
+								
+								// check again, don't use bCachedFileExists
+								&& fs.existsSync(strCachedFilePath)
+								
+								// Asked by developers to be able to put files in the cache and not have them deleted if not found on the repo.
+								&& path.extname(strCachedFilePath) !== ".keep"
+								&& !fs.existsSync(strCachedFilePath + ".keep")
+
+								&& !cachedFileStats.isDirectory()
+							)
+							{
+								console.error("HEAD request status code " + JSON.stringify(fetchHeadResponse.status) + ", deleting existing cached file.");
+								
+								cachedFileStats = null;
+								try
 								{
-									console.error(error);
+									console.log(`Deleting ${strCachedFilePath} because HTTP server returned 404 Not Found for ${this._strTargetURLBasePath + objParsedURL.path.substr(1)}`);
+									await fs.unlink(strCachedFilePath);
+								}
+								catch(error)
+								{
+									if(error.code !== "ENOENT")
+									{
+										console.error(error);
+									}
+								}
+							}
+							
+							if(
+								fetchHeadResponse.status < 200
+								|| fetchHeadResponse.status > 299
+							)
+							{
+								if(!fs.existsSync(strCachedFilePath))
+								{
+									serverResponse.statusCode = fetchHeadResponse.status ? fetchHeadResponse.status : 500;
+									serverResponse.write("HEAD request failed and there is no cached file.");
+									serverResponse.end();
+
+									return;
+								}
+								else
+								{
+									console.error("HEAD request status code " + JSON.stringify(fetchHeadResponse.status) + ". Skipping cache write.");
+									bSkipCacheWrite = true;
 								}
 							}
 						}
-						
-						if(
-							fetchHeadResponse.status < 200
-							|| fetchHeadResponse.status > 299
-						)
+						catch(error)
 						{
+							console.error(error);
+							
+							bSkipCacheWrite = true;
+
 							if(!fs.existsSync(strCachedFilePath))
 							{
-								serverResponse.statusCode = fetchHeadResponse.status ? fetchHeadResponse.status : 500;
-								serverResponse.write("HEAD request failed and there is no cached file.");
+								console.error("HEAD request failed with thrown error and there is no cached file. Proxying the HTTP code and returning.");
+
+								serverResponse.statusCode = 500;
+								serverResponse.write(error.message + "\r\n" + error.stack);
 								serverResponse.end();
 
 								return;
 							}
-							else
-							{
-								console.error("HEAD request status code " + JSON.stringify(fetchHeadResponse.status) + ". Skipping cache write.");
-								bSkipCacheWrite = true;
-							}
 						}
 					}
-					catch(error)
-					{
-						console.error(error);
-						
-						bSkipCacheWrite = true;
 
-						if(!fs.existsSync(strCachedFilePath))
-						{
-							console.error("HEAD request failed with thrown error and there is no cached file. Proxying the HTTP code and returning.");
-
-							serverResponse.statusCode = 500;
-							serverResponse.write(error.message + "\r\n" + error.stack);
-							serverResponse.end();
-
-							return;
-						}
-					}
-				}
-
-
-				if(
-					!bSkipCacheWrite
-					&& fetchHeadResponse.headers.get("content-length")
-					&& fetchHeadResponse.headers.get("content-length") >= this._nBytesMinimumFileSize
-				)
-				{
-					for(let strHeaderName of Object.keys(fetchHeadResponse.headers.raw()))
-					{
-						serverResponse.setHeader(strHeaderName, fetchHeadResponse.headers.get(strHeaderName));
-					}
 
 					if(
-						// Check again, don't use bCachedFileExists
-						!fs.existsSync(strCachedFilePath)
-						|| (
-							serverResponse.hasHeader("content-length")
-							&& cachedFileStats !== null
-							&& cachedFileStats.size !== parseInt(serverResponse.getHeader("content-length"), 10)
-						)
-						|| (
-							// If the web server's last modified timestamp is earlier than the local copy, then the local copy's modified timestamp is useless.
-							serverResponse.hasHeader("last-modified")
-							&& cachedFileStats !== null
-							&& Math.floor(cachedFileStats.mtime.getTime() / 1000) < Math.floor(new Date(serverResponse.getHeader("last-modified")).getTime() / 1000)
-						)
+						!bSkipCacheWrite
+						&& fetchHeadResponse.headers.get("content-length")
+						&& fetchHeadResponse.headers.get("content-length") >= this._nBytesMinimumFileSize
 					)
 					{
-						bSkipStorageCache = true;
-
-						await HTTPProxyCache.mkdirRecursive(path.dirname(strCachedFilePath));
-
-						const strSufixExtension = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
-
-						try
+						for(let strHeaderName of Object.keys(fetchHeadResponse.headers.raw()))
 						{
-							// Condition to avoid race condition.
-							if(this._objOngoingCacheWrites[strCachedFilePath] === undefined)
+							serverResponse.setHeader(strHeaderName, fetchHeadResponse.headers.get(strHeaderName));
+						}
+
+						if(
+							// Check again, don't use bCachedFileExists
+							!fs.existsSync(strCachedFilePath)
+							|| (
+								serverResponse.hasHeader("content-length")
+								&& cachedFileStats !== null
+								&& cachedFileStats.size !== parseInt(serverResponse.getHeader("content-length"), 10)
+							)
+							|| (
+								// If the web server's last modified timestamp is earlier than the local copy, then the local copy's modified timestamp is useless.
+								serverResponse.hasHeader("last-modified")
+								&& cachedFileStats !== null
+								&& Math.floor(cachedFileStats.mtime.getTime() / 1000) < Math.floor(new Date(serverResponse.getHeader("last-modified")).getTime() / 1000)
+							)
+						)
+						{
+							bSkipStorageCache = true;
+
+							await HTTPProxyCache.mkdirRecursive(path.dirname(strCachedFilePath));
+
+							const strSufixExtension = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
+
+							try
 							{
-								this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
-									//let nStreamsFinished = 0;
+								// Condition to avoid race condition.
+								if(this._objOngoingCacheWrites[strCachedFilePath] === undefined)
+								{
+									this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
+										//let nStreamsFinished = 0;
 
-									const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
+										const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
 
-									wstream.on("error",	fnReject);
+										wstream.on("error",	fnReject);
 
-									serverResponse.on("error", fnReject);
-									serverResponse.on("close", () => {
-										fnReject(new Error("Connection closed before sending the whole response."));
+										serverResponse.on("error", fnReject);
+										serverResponse.on("close", () => {
+											fnReject(new Error("Connection closed before sending the whole response."));
+										});
+
+										serverResponse.on(
+											"finish", 
+											async () => {
+												serverResponse.end();
+
+												await sleep(20);
+												wstream.end();
+
+												fnResolve();
+											}
+										);
+
+										const fetchResponse = await fetch(this._strTargetURLBasePath + objParsedURL.path.substr(1), {headers: headers});
+										stream.copy(serverResponse, wstream);
+										fetchResponse.body.pipe(serverResponse);
 									});
+								}
+								else
+								{
+									// Not waiting for the cache to be written, cause for a long wait HTTP clients may time out.
+									// Proxying the request around the cache system, while it is being populated, triggered by another previous request.
+									this._proxyRequest(incomingRequest, serverResponse);
+									return;
+								}
 
-									serverResponse.on(
-										"finish", 
-										async () => {
-											serverResponse.end();
-
-											await sleep(20);
-											wstream.end();
-
-											fnResolve();
-										}
-									);
-
-									const fetchResponse = await fetch(this._strTargetURLBasePath + objParsedURL.path.substr(1), {headers: headers});
-									stream.copy(serverResponse, wstream);
-									fetchResponse.body.pipe(serverResponse);
-								});
+								//console.log("bSkipCacheWrite", bSkipCacheWrite, "content-length", _incomingMessageHEAD.headers["content-length"]);
+								await this._objOngoingCacheWrites[strCachedFilePath];
 							}
-							else
+							catch(error)
 							{
-								// Not waiting for the cache to be written, cause for a long wait HTTP clients may time out.
-								// Proxying the request around the cache system, while it is being populated, triggered by another previous request.
-								this._proxyRequest(incomingRequest, serverResponse);
+								console.log(error);
+								serverResponse.statusCode = 500;
+								serverResponse.end();
+
+								delete this._objOngoingCacheWrites[strCachedFilePath];
+
 								return;
 							}
 
-							//console.log("bSkipCacheWrite", bSkipCacheWrite, "content-length", _incomingMessageHEAD.headers["content-length"]);
-							await this._objOngoingCacheWrites[strCachedFilePath];
-						}
-						catch(error)
-						{
-							console.log(error);
-							serverResponse.statusCode = 500;
-							serverResponse.end();
-
-							delete this._objOngoingCacheWrites[strCachedFilePath];
-
+							await this._renameTempToFinal(
+								strCachedFilePath, 
+								strSufixExtension, 
+								serverResponse.getHeader("last-modified") ? new Date(serverResponse.getHeader("last-modified")).getTime() : 0, 
+								parseInt(serverResponse.getHeader("content-length"), 10)
+							);
+							
 							return;
 						}
-
-						await this._renameTempToFinal(
-							strCachedFilePath, 
-							strSufixExtension, 
-							serverResponse.getHeader("last-modified") ? new Date(serverResponse.getHeader("last-modified")).getTime() : 0, 
-							parseInt(serverResponse.getHeader("content-length"), 10)
-						);
-						
-						return;
 					}
 				}
 
@@ -322,7 +338,10 @@ class HTTPProxyCache
 				// or some other error
 				// then attempt to server the file from cache if it exists.
 				if(
-					!bSkipStorageCache
+					(
+						!bSkipStorageCache
+						|| bKeepFlagAndFileExists
+					)
 					
 					// check again, don't use bCachedFileExists
 					&& fs.existsSync(strCachedFilePath)
