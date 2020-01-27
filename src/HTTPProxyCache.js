@@ -234,6 +234,30 @@ class HTTPProxyCache
 
 					if(
 						!bSkipCacheWrite
+						&& (
+							fetchHeadResponse.headers.get("content-length")
+							|| fetchHeadResponse.headers.get("content-length") === 0
+						)
+						&& fetchHeadResponse.headers.get("content-length") < this._nBytesMinimumFileSize
+						&& !bKeepFlagAndFileExists
+					)
+					{
+						if(fs.existsSync(strCachedFilePath))
+						{
+							try
+							{
+								await fs.unlink(strCachedFilePath);
+							}
+							catch(error)
+							{
+								console.error(error);
+							}
+						}
+					}
+					
+					
+					if(
+						!bSkipCacheWrite
 						&& fetchHeadResponse.headers.get("content-length")
 						&& fetchHeadResponse.headers.get("content-length") >= this._nBytesMinimumFileSize
 					)
