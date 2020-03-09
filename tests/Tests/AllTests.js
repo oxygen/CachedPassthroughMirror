@@ -1,5 +1,6 @@
 const assert = require("assert");
 const cluster = require("cluster");
+const sleep = require("sleep-promise");
 
 const fetch = require("node-fetch");
 const fs = require("fs-promise");
@@ -157,6 +158,8 @@ class AllTests
 		assert(fs.existsSync(strFileToKeep), `Was expecting ${strFileToKeep} to persist.`);
 		assert(fs.existsSync(strFileToKeep + ".keep"), `Was expecting ${strFileToKeep + ".keep"} to persist.`);
 
+		await this.testFileSizeChange();
+		await this.testFileModifiedChange();
 
 		fs.removeSync(this._strCacheDirectoryPath);
 
@@ -198,6 +201,62 @@ class AllTests
 		}
 
 		console.log("Finished the " + arrManyParallelFetchPromises.length + " requests.");
+	}
+
+
+	/**
+	 * Test cache invalidation on file size change.
+	 */
+	async testFileSizeChange()
+	{
+		const strTestFileName = "200-OK.10MB-10seconds-change-size-test.bin";
+		const strTestFilePath = path.join(this._strCacheDirectoryPath, strTestFileName);
+
+		assert(!fs.existsSync(strTestFilePath), `Was expecting ${strTestFilePath} NOT to exist`);
+		await (await fetch(this._strRootCachedURL + `/${strTestFileName}?stage=before`)).buffer();
+		
+		// Wait to make sure disk write is finished and the download promise is cleared.
+		await sleep(2000);
+		assert(fs.existsSync(strTestFilePath), `Was expecting ${strTestFilePath} to exist`);
+
+		const nFileSizeBytesOnDiskBeforeChange = (await fs.stat(strTestFilePath)).size;
+
+		await (await fetch(this._strRootCachedURL + `/${strTestFileName}?stage=after`)).buffer();
+		await sleep(2000);
+		assert(fs.existsSync(strTestFilePath), `Was expecting ${strTestFilePath} to exist`);
+
+		const nFileSizeBytesOnDiskAfterChange = (await fs.stat(strTestFilePath)).size;
+		assert(nFileSizeBytesOnDiskBeforeChange !== nFileSizeBytesOnDiskAfterChange, `Was expecting ${strTestFilePath} to have changed its file size.`);
+
+		fs.unlinkSync(strTestFilePath);
+	}
+
+
+	/**
+	 * Test cache invalidation on last updated timestamp change.
+	 */
+	async testFileModifiedChange()
+	{
+		const strTestFileName = "200-OK.10MB-10seconds-change-timestamp-test.bin";
+		const strTestFilePath = path.join(this._strCacheDirectoryPath, strTestFileName);
+
+		assert(!fs.existsSync(strTestFilePath), `Was expecting ${strTestFilePath} NOT to exist`);
+		await (await fetch(this._strRootCachedURL + `/${strTestFileName}?stage=before`)).buffer();
+		
+		// Wait to make sure disk write is finished and the download promise is cleared.
+		await sleep(2000);
+		assert(fs.existsSync(strTestFilePath), `Was expecting ${strTestFilePath} to exist`);
+
+		const timestampLastModifiedOnDiskBeforeChange = Math.floor((await fs.stat(strTestFilePath)).mtime.getTime() / 1000);
+
+		await (await fetch(this._strRootCachedURL + `/${strTestFileName}?stage=after`)).buffer();
+		await sleep(2000);
+		assert(fs.existsSync(strTestFilePath), `Was expecting ${strTestFilePath} to exist`);
+
+		const timestampLastModifiedOnDiskAfterChange = Math.floor((await fs.stat(strTestFilePath)).mtime.getTime() / 1000);
+		assert(timestampLastModifiedOnDiskBeforeChange !== timestampLastModifiedOnDiskAfterChange, `Was expecting ${strTestFilePath} to have changed its modified timestamp.`);
+
+		fs.unlinkSync(strTestFilePath);
 	}
 
 

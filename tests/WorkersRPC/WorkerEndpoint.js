@@ -5,6 +5,7 @@ const MasterClient = require("./MasterClient");
 
 const http = require("http");
 const url = require("url");
+const querystring = require("querystring");
 const assert = require("assert");
 
 const sleep = require("sleep-promise");
@@ -101,6 +102,8 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 				{
 					const strIndex = `
 						<a href="/200-OK.10MB-10seconds.bin">/200-OK.10MB-10seconds.bin</a><br>
+						<a href="/200-OK.10MB-10seconds-change-timestamp-test.bin">/200-OK.10MB-10seconds-change-timestamp-test.bin</a><br>
+						<a href="/200-OK.10MB-10seconds-change-size-test.bin">/200-OK.10MB-10seconds-change-size-test.bin</a><br>
 						<a href="/200-OK.1MB-1seconds-ConnectionReset.bin">/200-OK.1MB-1seconds-ConnectionReset.bin</a><br>
 						<a href="/401-Unauthorized">/401-Unauthorized</a><br>
 						<a href="/403-Forbidden">/403-Forbidden</a><br>
@@ -193,6 +196,65 @@ class WorkerEndpoint extends JSONRPC.NodeClusterBase.WorkerEndpoint
 
 					serverResponse.end();
 					console.log("[" + process.pid + "] Static HTTP server, .end() served " + incomingRequest.method + " " + incomingRequest.url);
+				}
+				
+				// Special file used to test cache invalidation.
+				else if(
+					strRelativeFilePath === "/200-OK.10MB-10seconds-change-timestamp-test.bin"
+					|| strRelativeFilePath === "/200-OK.10MB-10seconds-change-size-test.bin"
+				)
+				{
+					const objQuery = querystring.parse(objParsedURL.query);
+					if (!["before", "after"].includes(objQuery.stage))
+					{
+						serverResponse.statusCode = 500;
+						serverResponse.write(`${strRelativeFilePath} invalid 'stage' query param!`, "utf8", () => serverResponse.end());
+					}
+					else
+					{
+						let nSizeBytes = WorkerEndpoint.minimumCacheableSizeBytes;
+						const nSizeBytesIncrement = parseInt(WorkerEndpoint.minimumCacheableSizeBytes / 10, 10);
+
+						if (
+							strRelativeFilePath === "/200-OK.10MB-10seconds-change-size-test.bin"
+							&& objQuery.stage === "after"
+						)
+						{
+							nSizeBytes += 10;
+						}
+						
+						let strLastModified = "Wed, 21 Oct 2015 07:00:00 GMT";
+
+						if (
+							strRelativeFilePath === "/200-OK.10MB-10seconds-change-timestamp-test.bin"
+							&& objQuery.stage === "after"
+						)
+						{
+							strLastModified = "Wed, 21 Oct 2015 10:00:00 GMT";
+						}
+
+						serverResponse.setHeader("content-length", nSizeBytes);
+						serverResponse.setHeader("content-type", "application/octet-stream");
+						serverResponse.setHeader("last-modified", strLastModified);
+
+						if(incomingRequest.method === "GET")
+						{
+							let nSentBytes = 0;
+							while(nSentBytes < nSizeBytes)
+							{
+								await new Promise((fnResolve, fnReject) => {
+									serverResponse.write(Buffer.allocUnsafe(nSizeBytesIncrement), "binary", fnResolve);
+								});
+
+								nSentBytes += nSizeBytesIncrement;
+
+								await sleep(1000);
+							}
+						}
+
+						serverResponse.end();
+						console.log("[" + process.pid + "] Static HTTP server, .end() served " + incomingRequest.method + " " + incomingRequest.url);
+					}
 				}
 
 				// After this, the temporary download file should be cleaned up after losing the connection.

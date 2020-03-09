@@ -75,7 +75,6 @@ class HTTPProxyCache
 				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
 				let bSkipCacheWrite = false;
 				let bSkipStorageCache = false;
-				// let bCachedFileExists = fs.existsSync(strCachedFilePath);
 				let cachedFileStats = null;
 
 				
@@ -164,8 +163,6 @@ class HTTPProxyCache
 
 							if(
 								parseInt(fetchHeadResponse.status, 10) === 404
-								
-								// check again, don't use bCachedFileExists
 								&& fs.existsSync(strCachedFilePath)
 								
 								// Asked by developers to be able to put files in the cache and not have them deleted if not found on the repo.
@@ -268,7 +265,6 @@ class HTTPProxyCache
 						}
 
 						if(
-							// Check again, don't use bCachedFileExists
 							!fs.existsSync(strCachedFilePath)
 							|| (
 								serverResponse.hasHeader("content-length")
@@ -300,15 +296,21 @@ class HTTPProxyCache
 										const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
 
 										wstream.on("error",	fnReject);
+										
+										let bServerResponseGotFinishEvent = false;
 
 										serverResponse.on("error", fnReject);
 										serverResponse.on("close", () => {
-											fnReject(new Error("Connection closed before sending the whole response."));
+											if (!bServerResponseGotFinishEvent)
+											{
+												fnReject(new Error("Connection closed before sending the whole response."));
+											}
 										});
 
 										serverResponse.on(
 											"finish", 
 											async () => {
+												bServerResponseGotFinishEvent = true;
 												serverResponse.end();
 
 												await sleep(20);
@@ -331,7 +333,6 @@ class HTTPProxyCache
 									return;
 								}
 
-								//console.log("bSkipCacheWrite", bSkipCacheWrite, "content-length", _incomingMessageHEAD.headers["content-length"]);
 								await this._objOngoingCacheWrites[strCachedFilePath];
 							}
 							catch(error)
@@ -366,8 +367,6 @@ class HTTPProxyCache
 						!bSkipStorageCache
 						|| bKeepFlagAndFileExists
 					)
-					
-					// check again, don't use bCachedFileExists
 					&& fs.existsSync(strCachedFilePath)
 				)
 				{
@@ -438,14 +437,46 @@ class HTTPProxyCache
 
 	async _renameTempToFinal(strCachedFilePath, strSufixExtension, nUnixTimeLastModifiedMilliseconds, nContentLength)
 	{
-		const cachedFileStats = fs.statSync(strCachedFilePath + strSufixExtension);
+		let statsExistingCachedFile = null;
+		let statsNewDownloadTempFile = null;
 
-		// Check again, don't use bCachedFileExists.
+		if (fs.existsSync(strCachedFilePath + strSufixExtension))
+		{
+			statsNewDownloadTempFile = fs.statSync(strCachedFilePath + strSufixExtension);
+		}
+
+		if (fs.existsSync(strCachedFilePath))
+		{
+			statsExistingCachedFile = fs.statSync(strCachedFilePath);
+		}
+
+		if (
+			statsExistingCachedFile
+			&& statsNewDownloadTempFile
+			&& (
+				statsExistingCachedFile.size !== statsNewDownloadTempFile.size
+				|| Math.floor(statsExistingCachedFile.mtime.getTime() / 1000) < Math.floor(statsNewDownloadTempFile.mtime.getTime() / 1000)
+			)
+		)
+		{
+			try
+			{
+				fs.unlinkSync(strCachedFilePath);
+			}
+			catch(error)
+			{
+				if(error.code !== "ENOENT")
+				{
+					console.error(error);
+				}
+			}
+		}
+
 		if(
 			!fs.existsSync(strCachedFilePath)
-			&& fs.existsSync(strCachedFilePath + strSufixExtension)
+			&& statsNewDownloadTempFile
 			&& nContentLength >= 0
-			&& cachedFileStats.size === nContentLength
+			&& statsNewDownloadTempFile.size === nContentLength
 		)
 		{
 			try
@@ -466,6 +497,7 @@ class HTTPProxyCache
 
 						if(!fs.existsSync(strCachedFilePath + strSufixExtension))
 						{
+							delete this._objOngoingCacheWrites[strCachedFilePath];
 							return;
 						}
 					}
