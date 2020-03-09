@@ -437,25 +437,25 @@ class HTTPProxyCache
 
 	async _renameTempToFinal(strCachedFilePath, strSufixExtension, nUnixTimeLastModifiedMilliseconds, nContentLength)
 	{
-		let cachedFileStats = null;
-		let tempFileStats = null;
+		let statsExistingCachedFile = null;
+		let statsNewDownloadTempFile = null;
 
 		if (fs.existsSync(strCachedFilePath + strSufixExtension))
 		{
-			tempFileStats = fs.statSync(strCachedFilePath + strSufixExtension);
+			statsNewDownloadTempFile = fs.statSync(strCachedFilePath + strSufixExtension);
 		}
 
 		if (fs.existsSync(strCachedFilePath))
 		{
-			cachedFileStats = fs.statSync(strCachedFilePath);
+			statsExistingCachedFile = fs.statSync(strCachedFilePath);
 		}
 
 		if (
-			cachedFileStats
-			&& tempFileStats
+			statsExistingCachedFile
+			&& statsNewDownloadTempFile
 			&& (
-				cachedFileStats.size !== tempFileStats.size
-				|| Math.floor(cachedFileStats.mtime.getTime() / 1000) < Math.floor(tempFileStats.mtime.getTime() / 1000)
+				statsExistingCachedFile.size !== statsNewDownloadTempFile.size
+				|| Math.floor(statsExistingCachedFile.mtime.getTime() / 1000) < Math.floor(statsNewDownloadTempFile.mtime.getTime() / 1000)
 			)
 		)
 		{
@@ -474,9 +474,9 @@ class HTTPProxyCache
 
 		if(
 			!fs.existsSync(strCachedFilePath)
-			&& tempFileStats
+			&& statsNewDownloadTempFile
 			&& nContentLength >= 0
-			&& tempFileStats.size === nContentLength
+			&& statsNewDownloadTempFile.size === nContentLength
 		)
 		{
 			try
