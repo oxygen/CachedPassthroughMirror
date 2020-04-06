@@ -319,10 +319,17 @@ class HTTPProxyCache
 												fnResolve();
 											}
 										);
-
-										const fetchResponse = await fetch(this._strTargetURLBasePath + objParsedURL.path.substr(1), {headers: headers});
-										stream.copy(serverResponse, wstream);
-										fetchResponse.body.pipe(serverResponse);
+										
+										try
+										{
+											const fetchResponse = await fetch(this._strTargetURLBasePath + objParsedURL.path.substr(1), {headers: headers});
+											stream.copy(serverResponse, wstream);
+											fetchResponse.body.pipe(serverResponse);
+										}
+										catch(error)
+										{
+											fnReject(error);
+										}
 									});
 								}
 								else
@@ -736,7 +743,17 @@ class HTTPProxyCache
 
 									wstream.on("error",	fnReject);
 
-									const fetchResponse = await fetch(this._strTargetURLBasePath + strFilePath);
+									let fetchResponse;
+
+									try
+									{
+										fetchResponse = await fetch(this._strTargetURLBasePath + strFilePath);
+									}
+									catch(error)
+									{
+										fnReject(error);
+										return;
+									}
 
 									wstream.on(
 										"finish",
