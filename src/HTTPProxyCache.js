@@ -8,13 +8,14 @@ const cluster = require("cluster");
 
 const HTTPProxy = require("http-proxy");
 const sleep = require("sleep-promise");
-const fs = require("fs-promise");
+const fs = require("fs-extra");
 const fetch = require("node-fetch");
 
 const dir = require("node-dir");
 const stream = require("stream");
 stream.copy = require("stream-copy").copy;
 
+const strSufixExtensionPreventDuplicateDownloads = ".keep-alive.download";
 
 module.exports = 
 class HTTPProxyCache
@@ -73,9 +74,42 @@ class HTTPProxyCache
 			try
 			{
 				const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, objParsedURL.pathname);
+
+				
+				while(fs.existsSync(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads))
+				{
+					const dateNow = new Date();
+
+					try
+					{
+						const fileStats = await fs.stat(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads);
+						
+						if(fileStats.mtimeMs < dateNow.getTime() - 8000)
+						{
+							break;
+						}
+
+						// System time was corrected in the mean time.
+						if(fileStats.mtimeMs > dateNow.getTime() + 8000)
+						{
+							break;
+						}
+					}
+					catch(error)
+					{
+						console.error(error);
+						
+						break;
+					}
+
+					await sleep(4000);
+				}
+
+
 				let bSkipCacheWrite = false;
 				let bSkipStorageCache = false;
 				let cachedFileStats = null;
+				
 
 				
 				if(incomingRequest.headers["authorization"] || incomingRequest.headers["proxy-authorization"] || incomingRequest.headers["www-authenticate"])
@@ -197,8 +231,7 @@ class HTTPProxyCache
 								if(!fs.existsSync(strCachedFilePath))
 								{
 									serverResponse.statusCode = fetchHeadResponse.status ? fetchHeadResponse.status : 500;
-									serverResponse.write("HEAD request failed and there is no cached file.");
-									serverResponse.end();
+									serverResponse.end("HEAD request failed and there is no cached file.");
 
 									return;
 								}
@@ -220,8 +253,7 @@ class HTTPProxyCache
 								console.error("HEAD request failed with thrown error and there is no cached file. Proxying the HTTP code and returning.");
 
 								serverResponse.statusCode = 500;
-								serverResponse.write(error.message + "\r\n" + error.stack);
-								serverResponse.end();
+								serverResponse.end(error.message + "\r\n" + error.stack);
 
 								return;
 							}
@@ -283,51 +315,114 @@ class HTTPProxyCache
 
 							await HTTPProxyCache.mkdirRecursive(path.dirname(strCachedFilePath));
 
-							const strSufixExtension = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
+							const strSufixExtensionDownloading = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
+
+
+							let nIntervalIDKeepAlive;
 
 							try
 							{
 								// Condition to avoid race condition.
 								if(this._objOngoingCacheWrites[strCachedFilePath] === undefined)
 								{
-									this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
-										//let nStreamsFinished = 0;
+									if(nIntervalIDKeepAlive === undefined)
+									{
+										nIntervalIDKeepAlive = setInterval(async() => {
+											const dateNow = new Date();
 
-										const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
-
-										wstream.on("error",	fnReject);
-										
-										let bServerResponseGotFinishEvent = false;
-
-										serverResponse.on("error", fnReject);
-										serverResponse.on("close", () => {
-											if (!bServerResponseGotFinishEvent)
+											try
 											{
-												fnReject(new Error("Connection closed before sending the whole response."));
+												await fs.utimes(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads, dateNow, dateNow, console.error);
 											}
-										});
-
-										serverResponse.on(
-											"finish", 
-											async () => {
-												bServerResponseGotFinishEvent = true;
-												serverResponse.end();
-
-												await sleep(20);
-												wstream.end();
-
-												fnResolve();
+											catch(error)
+											{
+												console.error(error);
 											}
-										);
-										
+										}, 4000);
+									}
+
+									this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
 										try
 										{
-											const fetchResponse = await fetch(this._strTargetURLBasePath + objParsedURL.path.substr(1), {headers: headers});
-											stream.copy(serverResponse, wstream);
-											fetchResponse.body.pipe(serverResponse);
+											//let nStreamsFinished = 0;
+
+											try
+											{
+												await fs.close(await fs.open(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads, "w"));
+												const dateNow = new Date();
+												await fs.utimes(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads, /*atime*/ dateNow, /*mtime*/ dateNow, console.error);
+											}
+											catch(error)
+											{
+												console.error(error);
+											}
+
+											const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtensionDownloading);
+
+											wstream.on("error",	fnReject);
+											
+											let bServerResponseGotFinishEvent = false;
+
+											serverResponse.on("error", fnReject);
+											serverResponse.on("close", () => {
+												if (!bServerResponseGotFinishEvent)
+												{
+													fnReject(new Error("Connection closed before sending the whole response."));
+												}
+											});
+
+											serverResponse.on(
+												"finish", 
+												async () => {
+													bServerResponseGotFinishEvent = true;
+													serverResponse.end();
+
+													await sleep(20);
+													wstream.end();
+
+													fnResolve();
+												}
+											);
+											
+											try
+											{
+												const fetchResponse = await fetch(this._strTargetURLBasePath + objParsedURL.path.substr(1), {headers: headers});
+												stream.copy(serverResponse, wstream);
+												fetchResponse.body.pipe(serverResponse);
+											}
+											catch(error)
+											{
+												fnReject(error);
+											}
 										}
 										catch(error)
 										{
+											console.error(error);
+
+											try
+											{
+												if(fs.existsSync(strCachedFilePath + strSufixExtensionDownloading))
+												{
+													await fs.unlink(strCachedFilePath + strSufixExtensionDownloading)
+												}
+											}
+											catch(error)
+											{
+												console.error(error);
+											}
+
+											try
+											{
+												if(fs.existsSync(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads))
+												{
+													await fs.unlink(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads)
+												}
+											}
+											catch(error)
+											{
+												console.error(error);
+											}
+	
 											fnReject(error);
 										}
 									});
@@ -352,10 +447,18 @@ class HTTPProxyCache
 
 								return;
 							}
+							finally
+							{
+								if(nIntervalIDKeepAlive !== undefined)
+								{
+									clearInterval(nIntervalIDKeepAlive);
+									nIntervalIDKeepAlive = undefined;
+								}
+							}
 
 							await this._renameTempToFinal(
 								strCachedFilePath, 
-								strSufixExtension, 
+								strSufixExtensionDownloading, 
 								serverResponse.getHeader("last-modified") ? new Date(serverResponse.getHeader("last-modified")).getTime() : 0, 
 								parseInt(serverResponse.getHeader("content-length"), 10)
 							);
@@ -426,8 +529,7 @@ class HTTPProxyCache
 				try
 				{
 					serverResponse.statusCode = 500;
-					serverResponse.write(error.message + "\r\n" + error.stack);
-					serverResponse.end();
+					serverResponse.end(error.message + "\r\n" + error.stack);
 
 					return;
 				}
@@ -523,7 +625,7 @@ class HTTPProxyCache
 				{
 					try
 					{
-						await fs.utimes(strCachedFilePath, /*atime*/ nUnixTimeSeconds, /*mtime*/ nUnixTimeSeconds);
+						await fs.utimes(strCachedFilePath, /*atime*/ nUnixTimeSeconds, /*mtime*/ nUnixTimeSeconds, console.error);
 					}
 					catch(error)
 					{
@@ -548,6 +650,18 @@ class HTTPProxyCache
 				{
 					console.error(error);
 				}
+			}
+
+			try
+			{
+				if(fs.existsSync(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads))
+				{
+					await fs.unlink(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads)
+				}
+			}
+			catch(error)
+			{
+				console.error(error);
 			}
 		}
 
@@ -577,8 +691,7 @@ class HTTPProxyCache
 				console.error(error);
 
 				serverResponse.statusCode = 500;
-				serverResponse.write(error.message + "\r\n" + error.stack);
-				serverResponse.end();
+				serverResponse.end(error.message + "\r\n" + error.stack);
 			}
 		);
 	}
@@ -679,6 +792,37 @@ class HTTPProxyCache
 
 						const strCachedFilePath = path.join(this._strCacheDirectoryRootPath, strFilePath);
 
+
+						while(fs.existsSync(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads))
+						{
+							const dateNow = new Date();
+
+							try
+							{
+								const fileStats = await fs.stat(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads);
+								
+								if(fileStats.mtimeMs < dateNow.getTime() - 8000)
+								{
+									break;
+								}
+
+								// System time was corrected in the mean time.
+								if(fileStats.mtimeMs > dateNow.getTime() + 8000)
+								{
+									break;
+								}
+							}
+							catch(error)
+							{
+								console.error(error);
+								
+								break;
+							}
+
+							await sleep(4000);
+						}
+
+
 						let bNeedsUpdate = false;
 						
 						if(fs.existsSync(strCachedFilePath))
@@ -730,66 +874,163 @@ class HTTPProxyCache
 
 						if(bNeedsUpdate)
 						{
-							const strSufixExtension = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
+							const strSufixExtensionDownloading = ".httpproxy.worker-" + (cluster.isMaster ? "master" : cluster.worker.id) + ".download";
+
+							let nIntervalIDKeepAlive;
 
 							if(this._objOngoingCacheWrites[strCachedFilePath] === undefined)
 							{
-								this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async (fnResolve, fnReject) => {
-									console.log(`Prefetching or updating ${strCachedFilePath}.`);
+								if(nIntervalIDKeepAlive === undefined)
+								{
+									nIntervalIDKeepAlive = setInterval(async() => {
+										const dateNow = new Date();
 
-									await HTTPProxyCache.mkdirRecursive(path.dirname(strCachedFilePath));
+										try
+										{
+											await fs.utimes(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads, dateNow, dateNow, console.error);
+										}
+										catch(error)
+										{
+											console.error(error);
+										}
+									}, 4000);
+								}
 
-									const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtension);
-
-									wstream.on("error",	fnReject);
-
-									let fetchResponse;
-
+								this._objOngoingCacheWrites[strCachedFilePath] = new Promise(async(fnResolve, fnReject) => {
 									try
 									{
-										fetchResponse = await fetch(this._strTargetURLBasePath + strFilePath);
+										console.log(`Prefetching or updating ${strCachedFilePath}.`);
+
+										await HTTPProxyCache.mkdirRecursive(path.dirname(strCachedFilePath));
+
+
+										try
+										{
+											await fs.close(await fs.open(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads, "w"));
+											const dateNow = new Date();
+											await fs.utimes(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads, /*atime*/ dateNow, /*mtime*/ dateNow, console.error);
+										}
+										catch(error)
+										{
+											console.error(error);
+										}
+
+
+										const wstream = fs.createWriteStream(strCachedFilePath + strSufixExtensionDownloading);
+
+										wstream.on("error",	fnReject);
+
+										let fetchResponse;
+
+										try
+										{
+											fetchResponse = await fetch(this._strTargetURLBasePath + strFilePath);
+										}
+										catch(error)
+										{
+											fnReject(error);
+											return;
+										}
+
+										wstream.on(
+											"finish",
+											async() => {
+												try
+												{
+													await sleep(20);
+
+													wstream.end();
+
+													await this._renameTempToFinal(
+														strCachedFilePath, 
+														strSufixExtensionDownloading, 
+														fetchResponse.headers.get("last-modified") ? new Date(fetchResponse.headers.get("last-modified")).getTime() : 0, 
+														parseInt(fetchResponse.headers.get("content-length"), 10)
+													);
+													
+													fnResolve();
+												}
+												catch(error)
+												{
+													fnReject(error);
+												}
+											}
+										);
+
+										fetchResponse.body.pipe(wstream);
 									}
 									catch(error)
 									{
-										fnReject(error);
-										return;
-									}
+										console.error(error);
 
-									wstream.on(
-										"finish",
-										async() => {
-											try
+										try
+										{
+											if(fs.existsSync(strCachedFilePath + strSufixExtensionDownloading))
 											{
-												await sleep(20);
-
-												wstream.end();
-
-												await this._renameTempToFinal(
-													strCachedFilePath, 
-													strSufixExtension, 
-													fetchResponse.headers.get("last-modified") ? new Date(fetchResponse.headers.get("last-modified")).getTime() : 0, 
-													parseInt(fetchResponse.headers.get("content-length"), 10)
-												);
-												
-												fnResolve();
-											}
-											catch(error)
-											{
-												fnReject(error);
+												await fs.unlink(strCachedFilePath + strSufixExtensionDownloading);
 											}
 										}
-									);
+										catch(error)
+										{
+											console.error(error);
+										}
 
-									fetchResponse.body.pipe(wstream);
+										try
+										{
+											if(fs.existsSync(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads))
+											{
+												await fs.unlink(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads);
+											}
+										}
+										catch(error)
+										{
+											console.error(error);
+										}
+
+										fnReject(error);
+									}
 								});
 							}
+
 
 							try
 							{
 								await this._objOngoingCacheWrites[strCachedFilePath];
 							}
+							catch(error)
+							{
+								try
+								{
+									if(fs.existsSync(strCachedFilePath + strSufixExtensionDownloading))
+									{
+										await fs.unlink(strCachedFilePath + strSufixExtensionDownloading);
+									}
+								}
+								catch(error)
+								{
+									console.error(error);
+								}
+
+								try
+								{
+									if(fs.existsSync(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads))
+									{
+										await fs.unlink(strCachedFilePath + strSufixExtensionPreventDuplicateDownloads);
+									}
+								}
+								catch(error)
+								{
+									console.error(error);
+								}
+							}
 							finally
 							{
+								if(nIntervalIDKeepAlive !== undefined)
+								{
+									clearInterval(nIntervalIDKeepAlive);
+									nIntervalIDKeepAlive = undefined;
+								}
+
 								delete this._objOngoingCacheWrites[strCachedFilePath];
 							}
 						}

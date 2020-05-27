@@ -1,6 +1,6 @@
 {
   "name": "http-proxy-cache-lf",
-  "version": "1.2.1",
+  "version": "2.0.0",
   "description": "Passthrough HTTP mirror with caching for large files.",
   "main": "index.js",
   "scripts": {
@@ -22,21 +22,21 @@
   "preferGlobal": false,
   "private": false,
   "engines": {
-    "node": ">=7.80"
+    "node": ">=12.0.0"
   },
   "dependencies": {
-    "fs-promise": "^2.0.2",
-    "http-proxy": "^1.16.2",
+    "fs-extra": "^9.0.0",
+    "http-proxy": "^1.18.1",
     "node-dir": "^0.1.17",
+    "node-fetch": "^1.7.3",
     "sleep-promise": "^2.0.0",
-    "stream-copy": "^1.0.0",
-    "node-fetch": "^1.7.3"
+    "stream-copy": "^1.0.0"
   },
   "devDependencies": {
     "babel-eslint": "*",
     "eslint": "*",
     "eslint-plugin-jsdoc": "*",
-    "jsonrpc-bidirectional": "^5.7.3",
-    "tmp": "0.0.33"
+    "jsonrpc-bidirectional": "^9.8.2",
+    "tmp": "^0.2.1"
   }
 }

@@ -3,7 +3,7 @@ const cluster = require("cluster");
 const sleep = require("sleep-promise");
 
 const fetch = require("node-fetch");
-const fs = require("fs-promise");
+const fs = require("fs-extra");
 const path = require("path");
 
 const WorkerEndpoint = require("../WorkersRPC/WorkerEndpoint");
